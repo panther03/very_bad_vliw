@@ -1,9 +1,10 @@
 // Types used in L1 interface
 typedef struct { Bit#(1) write; Bit#(26) addr; Bit#(512) data; } MainMemReq deriving (Eq, FShow, Bits, Bounded);
+typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(32) data; } Mem deriving (Eq, FShow, Bits, Bounded);
+// TODO;
 typedef struct { Bit#(4) word_byte; Bit#(32) addr; Bit#(32) data; } CacheReq deriving (Eq, FShow, Bits, Bounded);
 typedef Bit#(512) MainMemResp;
 typedef Bit#(32) Word;
-
 // (Curiosity Question: CacheReq address doesn't actually need to be 32 bits. Why?)
 // since we don't use the bottom 2 bits for anything
 // word_byte field controls byte write

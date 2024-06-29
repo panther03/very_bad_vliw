@@ -1,5 +1,5 @@
 BUILD_DIR=build
-BSC_FLAGS=--aggressive-conditions --show-schedule -p +:hw/core:hw/mem:hw/network:hw/top:hw/tb:hw/util -vdir $(BUILD_DIR) -bdir $(BUILD_DIR) -simdir $(BUILD_DIR) -info-dir $(BUILD_DIR) -o 
+BSC_FLAGS=--aggressive-conditions --show-schedule -p +:hw/core:hw/mem:hw/top:hw/tb:hw/util -vdir $(BUILD_DIR) -bdir $(BUILD_DIR) -simdir $(BUILD_DIR) -info-dir $(BUILD_DIR) -o 
 
 BSV_FILES=$(shell find hw -name "*.bsv" -type f)
 

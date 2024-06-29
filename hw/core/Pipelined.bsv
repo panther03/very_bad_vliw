@@ -1,5 +1,6 @@
 //`define KONATA_ENABLE
 //`define DEBUG_ENABLE
+`include "Logging.bsv"
 
 import FIFO::*;
 import FIFOF::*;
@@ -12,9 +13,10 @@ import KonataHelper::*;
 `endif
 import Printf::*;
 import Ehr::*;
-
-
-typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(32) data; } Mem deriving (Eq, FShow, Bits);
+import BranchUnit::*;
+import Alu::*;
+import MemUnit::*;
+import MemTypes::*;
 
 
 interface RVIfc#(numeric type n);
@@ -33,34 +35,20 @@ interface Scoreboard;
 endinterface
 
 module mkScoreboardBoolFlags(Scoreboard); 
-    Vector#(32,Ehr#(2, Bool)) ready <- replicateM(mkEhr(True));
+    Vector#(32,Reg#(Bool)) ready <- replicateM(mkReg(True));
 
     method Action insert(Bit#(5) dst);
-        ready[dst][1] <= False;
+        ready[dst] <= False;
     endmethod
 
     method Action remove(Bit#(5) dst);
-        ready[dst][0] <= True;
+        ready[dst] <= True;
     endmethod
 
     method ActionValue#(Bool) search(Bit#(5) src);
-        return ready[src][0];
+        return ready[src];
     endmethod
 endmodule
-
-// typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(32) data; } Mem deriving (Eq, FShow, Bits);
-typedef struct { Bool isUnsigned; Bit#(2) size; Bit#(2) offset; Bool mmio; } MemBusiness deriving (Eq, FShow, Bits);
-
-function Bool isMMIO(Bit#(32) addr);
-    /*Bool x = case (addr) 
-        32'hf000fff0: True;
-        32'hf000fff4: True;
-        32'hf000fff8: True;
-        default: False;
-    endcase;*/
-    // simplifying assumption
-    return addr[31:29] == 3'h7;
-endfunction
 
 typedef struct { Bit#(32) pc;
                  Bit#(32) ppc;
@@ -85,8 +73,6 @@ typedef struct {
     } D2E deriving (Eq, FShow, Bits);
 
 typedef struct { 
-    MemBusiness mem_business;
-    Bit#(32) data;
     DecodedInst dinst;
     Bool poisoned;
     Bit#(1) thread_id;
@@ -101,7 +87,7 @@ module mkPipelined (RVIfc#(n));
     FIFO#(Mem) toImem <- mkBypassFIFO;
     FIFO#(Mem) fromImem <- mkBypassFIFO;
     FIFO#(Mem) toDmem <- mkFIFO;
-    FIFOF#(Mem) fromDmem <- mkBypassFIFOF;
+    FIFO#(Mem) fromDmem <- mkBypassFIFO;
     FIFO#(Mem) toMMIO <- mkFIFO;
     FIFO#(Mem) fromMMIO <- mkBypassFIFO;
 
@@ -114,6 +100,19 @@ module mkPipelined (RVIfc#(n));
     RWire#(Bit#(6)) decodeSCPort <- mkRWire;
 
     Reg#(Bit#(1)) lastFetchedThread <- mkReg(fromInteger(numThreads - 1));
+
+    let memUnitInput = (interface MemUnitInput;
+        interface toDmem = toDmem;
+        interface fromDmem = fromDmem;
+        interface toMMIO = toMMIO;
+        interface fromMMIO = fromMMIO;
+    endinterface);
+    MemUnit mu <- mkMemUnit(memUnitInput);
+    let branchUnitInput = (interface BranchUnitInput;
+        interface extPC = pcs[0]; interface extEpoch = epochs[0]; 
+    endinterface);
+    BranchUnit bu <- mkBranchUnit(branchUnitInput);
+    Alu alu <- mkAlu();
 
     FIFO#(F2D) f2d <- mkFIFO;
     FIFO#(D2E) d2e <- mkFIFO;
@@ -210,10 +209,10 @@ module mkPipelined (RVIfc#(n));
         let rd_idx = getInstFields(instr).rd;
         let rs1_rdy <- scs[thread].search(rs1_idx);
         let rs2_rdy <- scs[thread].search(rs2_idx);
-
-        //if (debug) $display("(cyc=%d) [Pre-Decode] [%d,%d,%d] ", cyc, rs1_rdy, rs2_rdy, rd_rdy, fshow(getInstFields(instr)));
+        let valid_rs1 = True;
+        let valid_rs2 = True;
      
-        if ((rs1_rdy) && (rs2_rdy)) begin
+        if ((rs1_rdy || !valid_rs1) && (rs2_rdy || !valid_rs2)) begin
             // Dequeue IMEM result with pipeline register, keeping them in-sync
             fromImem.deq();
             f2d.deq();
@@ -272,92 +271,59 @@ module mkPipelined (RVIfc#(n));
         let current_id = decodedInstr.k_id;
     	executeKonata(lfh, current_id);
 `endif
-`ifdef DEBUG_ENABLE
-        $display("(cyc=%d) [Execute] ", cyc, fshow(thread));
-`endif
+        `DEBUG_PRINT(("(cyc=%d) [Execute] ", cyc, fshow(thread)))
 
 		let imm = getImmediate(dInst);
+        let poisoned = False;
+        let fields = getInstFields(dInst.inst);
+        let funct3 = fields.funct3;
         let rv1 = decodedInstr.rv1;
         let rv2 = decodedInstr.rv2;
-		Bool mmio = False;
+		
         let instr_pc = decodedInstr.ppc; // we reference from the CURRENT (i.e. previous) PC
-		let data = execALU32(dInst.inst, decodedInstr.rv1, decodedInstr.rv2, imm, instr_pc);
-		let isUnsigned = 0;
-		let funct3 = getInstFields(dInst.inst).funct3;
-		let size = funct3[1:0];
-		let addr = rv1 + imm;
-		Bit#(2) offset = addr[1:0];
-
-        let controlResult = execControl32(dInst.inst, rv1, rv2, imm, instr_pc);
 
         // Detect squashed instructions. We poison them so we can 
         // simply drop the instructions in writeback, freeing the 
         // scoreboard entry as we would normally.
-        let poisoned = False;
         if (epochs[thread][0] != decodedInstr.epoch) begin
 `ifdef KONATA_ENABLE
             squashed.enq(current_id);
 `endif
             poisoned = True;
-
-        // Poisoned instructions can't invalidate the epoch!
-        // Also, we can just use taken as a trigger for a misprediction, since we always predict not taken.
-        end else if (controlResult.taken) begin  
-            pcs[thread][1] <= controlResult.nextPC; 
-            epochs[thread][0] <= ~epochs[thread][0];
-        end
-
-		if (isMemoryInst(dInst) && !poisoned) begin
-			// Technical details for load byte/halfword/word
-		    let shift_amount = {offset, 3'b0};
-		    let byte_en = 0;
-		    case (size) matches
-			2'b00: byte_en = 4'b0001 << offset;
-			2'b01: byte_en = 4'b0011 << offset;
-			2'b10: byte_en = 4'b1111 << offset;
-		    endcase
-		    data = rv2 << shift_amount;
-		    addr = {addr[31:2], 2'b0};
-		    isUnsigned = funct3[2];
-		    let type_mem = (dInst.inst[5] == 1) ? byte_en : 0;
-		    let req = Mem {byte_en : type_mem,
-				       addr : addr,
-				       data : data};
-`ifdef DEBUG_ENABLE
-                $display("[Execute] Memory, addr=%x", addr);
-`endif
-		    if (isMMIO(addr)) begin 
-`ifdef DEBUG_ENABLE
-		        $display("[Execute] MMIO", fshow(req));
-`endif
-				toMMIO.enq(req);
-`ifdef KONATA_ENABLE
-                labelKonataLeft(lfh,current_id, $format(" (MMIO)", fshow(req)));
-`endif
-    		    mmio = True;
-		    end else begin 
-`ifdef KONATA_ENABLE
-                labelKonataLeft(lfh,current_id, $format(" (MEM)", fshow(req)));
-`endif
-    		    toDmem.enq(req);
-		    end
-		end
-		else if (isControlInst(dInst)) begin
+        end else if (isMemoryInst(dInst)) begin
+            mu.enq(MemRequest {
+                rv1: rv1,
+                rv2: rv2,
+                imm: imm,
+                inst: dInst.inst,
+                funct3: funct3,
+                pc: instr_pc
+            });
+        end else if (isControlInst(dInst)) begin
 `ifdef KONATA_ENABLE
             labelKonataLeft(lfh,current_id, $format(" (CTRL)"));
 `endif
-            data = instr_pc + 4;
+            bu.enq(BranchRequest {
+                rv1: rv1,
+                rv2: rv2,
+                imm: imm,
+                inst: dInst.inst,
+                pc: instr_pc
+            });
 		end else begin 
 `ifdef KONATA_ENABLE
             labelKonataLeft(lfh,current_id, $format(" (ALU)"));
 `endif
+            alu.enq(AluRequest {
+                rv1: rv1,
+                rv2: rv2,
+                imm: imm,
+                inst: dInst.inst,
+                pc: instr_pc
+            });
 		end
 
-        
-
-        e2w.enq(E2W{
-            mem_business: MemBusiness{isUnsigned: unpack(isUnsigned), size: size, offset: offset, mmio: mmio},
-            data: data,
+        e2w.enq(E2W{ 
             dinst: dInst,
 `ifdef KONATA_ENABLE
             k_id: current_id,
@@ -375,56 +341,35 @@ module mkPipelined (RVIfc#(n));
         e2w.deq();
         let dInst = executedInstr.dinst;
         let thread = executedInstr.thread_id;
-        let data = executedInstr.data;
-        let mem_business = executedInstr.mem_business;
         let poisoned = executedInstr.poisoned;
         let fields = getInstFields(dInst.inst);
 
-`ifdef KONATA_ENABLE
-        let current_id = executedInstr.k_id;
+        Bit#(32) data = ?;
         if (!poisoned) begin
+            if (isMemoryInst(dInst)) begin
+                data <- mu.deq();
+            end else if (isControlInst(dInst)) begin
+                data <- bu.deq();
+            end else begin
+                data <- alu.deq();
+            end
+
+`ifdef KONATA_ENABLE
+            let current_id = executedInstr.k_id;
             writebackKonata(lfh,current_id);
             retired.enq(current_id);
 
             if (dInst.valid_rd) begin
               labelKonataLeft(lfh,current_id, $format("RF [%d]=%d", fields.rd, data));
             end
-        end
 `endif
 
 `ifdef DEBUG_ENABLE
-		if(!poisoned) begin
-             $display("(cyc=%d) [Writeback] data=%d t=", cyc, data, fshow(thread));
-        end
+            $display("(cyc=%d) [Writeback] data=%d t=", cyc, data, fshow(thread));
 `endif
+        end
 
-        
-        if (isMemoryInst(dInst) && !poisoned) begin // (* // write_val *)
-            let resp = ?;
-		    if (mem_business.mmio) begin 
-                resp = fromMMIO.first();
-		        fromMMIO.deq();
-		    end else begin 
-                resp = fromDmem.first();
-		        fromDmem.deq();
-		    end
-            let mem_data = resp.data;
-            mem_data = mem_data >> {mem_business.offset ,3'b0};
-            case ({pack(mem_business.isUnsigned), mem_business.size}) matches
-	     	3'b000 : data = signExtend(mem_data[7:0]);
-	     	3'b001 : data = signExtend(mem_data[15:0]);
-	     	3'b100 : data = zeroExtend(mem_data[7:0]);
-	     	3'b101 : data = zeroExtend(mem_data[15:0]);
-	     	3'b010 : data = mem_data;
-             endcase
-		end
-
-        // TODO: fix this fault logic so bluespec doesnt complain
-        //if (!dInst.legal) begin
-		//	if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst));
-		//	pc[0] <= 0;	// Fault
-	    //end
-		if (dInst.valid_rd) begin
+        if (dInst.valid_rd) begin
             let rd_idx = fields.rd;
             if (rd_idx != 0) begin 
                 if (!poisoned) begin 
@@ -433,10 +378,15 @@ module mkPipelined (RVIfc#(n));
                 // $display("(cyc=%d) removing %d", cyc, rd_idx);
                 scs[thread].remove(rd_idx);
             end
-		end
+        end
+
+        // TODO: fix this fault logic so bluespec doesnt complain
+        //if (!dInst.legal) begin
+		//	if (debug) $display("[Writeback] Illegal Inst, Drop and fault: ", fshow(dInst));
+		//	pc[0] <= 0;	// Fault
+	    //end
 
 	endrule
-		
 
 	// ADMINISTRATION:
 
