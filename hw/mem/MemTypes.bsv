@@ -1,6 +1,7 @@
 // Types used in L1 interface
 typedef struct { Bit#(1) write; Bit#(26) addr; Bit#(512) data; } MainMemReq deriving (Eq, FShow, Bits, Bounded);
 typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(32) data; } Mem deriving (Eq, FShow, Bits, Bounded);
+typedef struct { Bit#(4) byte_en; Bit#(32) addr; Bit#(128) data; } IMem deriving (Eq, FShow, Bits, Bounded);
 // TODO;
 typedef struct { Bit#(4) word_byte; Bit#(32) addr; Bit#(32) data; } CacheReq deriving (Eq, FShow, Bits, Bounded);
 typedef Bit#(512) MainMemResp;
@@ -78,6 +79,21 @@ function L2ParsedAddress parseL2Address(Bit#(26) address);
     };
 endfunction
 
+// todo: 120 is more optimal
+typedef struct { Bit#(32) addr; Bit#(128) data; } ICacheReq deriving (Eq, FShow, Bits, Bounded);
+typedef Bit#(128) IWord;
+typedef Bit#(2) IWordOffset;
 
-// PLACEHOLDER!!
-typedef Bit#(34) Flit;
+typedef struct {
+    L1LineTag tag;
+    L1LineIndex index;
+    IWordOffset offset;
+} L1IParsedAddress deriving (Bits, Eq);
+
+function L1IParsedAddress parseL1IAddress(Bit#(32) address);
+    return L1IParsedAddress {
+        tag: address[31:13],
+        index: address[12:6],
+        offset: address[5:4]
+    };
+endfunction

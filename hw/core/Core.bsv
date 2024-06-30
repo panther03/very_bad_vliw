@@ -53,7 +53,7 @@ module mkCore #(Bit#(4) coreId, Bool multithreaded) (Core);
     FIFO#(CoreBusRequest) busReqs <- mkFIFO;
     FIFO#(Bit#(32)) busResps <- mkFIFO;
 
-    Reg#(Mem) ireq <- mkRegU;
+    Reg#(IMem) ireq <- mkRegU;
     FIFO#(Mem) dreq <- mkPipelineFIFO;
     FIFO#(Mem) mmioreq <- mkFIFO;
     let debug = False;

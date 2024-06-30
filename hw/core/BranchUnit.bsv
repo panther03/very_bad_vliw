@@ -32,7 +32,7 @@ module mkBranchUnit#(BranchUnitInput inIfc)(BranchUnit);
     method Action enq(BranchRequest b);
         // We can just use taken as a trigger for a misprediction, since we always predict not taken.
         let controlResult = execControl32(b.inst, b.rv1, b.rv2, b.imm, b.pc);
-        let data = b.pc + 4;
+        let data = b.pc + 16;
 
         if (controlResult.taken) begin  
             extPC[1] <= controlResult.nextPC; 

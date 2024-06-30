@@ -2,6 +2,7 @@
 import MainMem::*;
 import MemTypes::*;
 import Cache32::*;
+import ICache::*;
 import Cache512::*;
 import FIFO::*;
 
@@ -10,8 +11,8 @@ typedef enum {I, D} L2ReqSource deriving (Eq, Bits, FShow);
 interface CacheInterface;
     method Action sendReqData(CacheReq req);
     method ActionValue#(Word) getRespData();
-    method Action sendReqInstr(CacheReq req);
-    method ActionValue#(Word) getRespInstr();
+    method Action sendReqInstr(ICacheReq req);
+    method ActionValue#(IWord) getRespInstr();
 endinterface
 
 
@@ -19,7 +20,7 @@ module mkCacheInterface(CacheInterface);
     let verbose = True;
     MainMem mainMem <- mkMainMem(); 
     Cache512 cacheL2 <- mkCache;
-    Cache32 cacheI <- mkCache32;
+    ICache cacheI <- mkICache;
     Cache32 cacheD <- mkCache32;
     FIFO#(L2ReqSource) l2ReqFifo <- mkFIFO;
 
@@ -69,7 +70,7 @@ module mkCacheInterface(CacheInterface);
         return word;
     endmethod
 
-    method Action sendReqInstr(CacheReq req);
+    method Action sendReqInstr(ICacheReq req);
         cacheI.putFromProc(req);
     endmethod
 

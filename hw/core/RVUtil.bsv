@@ -408,7 +408,7 @@ function ControlResult execControl32(Bit#(32) inst, Bit#(32) rs1_val, Bit#(32) r
     Bool isJAL = (inst[2] == 1'b1) && (inst[3] == 1'b1);
     Bool isJALR = (inst[2] == 1'b1) && (inst[3] == 1'b0);
 
-    Bit#(32) incPC = pc + 4;
+    Bit#(32) incPC = pc + 16;
     Bit#(3) funct3 = inst[14:12];
 
     Bool taken = True; // for JAL and JALR
