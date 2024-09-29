@@ -24,7 +24,24 @@ impl Bundle {
             alu1: None,
             mem: None,
             branch: None,
+        } 
+    }
+
+    pub fn valid_insts_mut<'a>(&'a mut self) -> Vec<&'a mut DepInst> {
+        let mut insts = Vec::new();
+        if let Some(inst) = &mut self.alu0 {
+            insts.push(inst);
         }
+        if let Some(inst) = &mut self.alu1 {
+            insts.push(inst);
+        }
+        if let Some(inst) = &mut self.mem {
+            insts.push(inst);
+        }
+        if let Some(inst) = &mut self.branch {
+            insts.push(inst);
+        }
+        insts
     }
 }
 
@@ -49,20 +66,23 @@ impl fmt::Display for Bundle {
     }
 }
 
-type ScheduledBasicBlock = Vec<Bundle>;
+
 
 pub struct ScheduledProgram {
-    pub bbs: Vec<ScheduledBasicBlock>,
+    pub schedule: Vec<Bundle>,
+    pub bb_starts: Vec<usize>,
     pub starts: HashMap<usize, usize>,
 }
 
 impl fmt::Display for ScheduledProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i,bb) in (&self.bbs).iter().enumerate() {
-            write!(f, "BasicBlock {}:\n", i)?;
-            for bundle in bb {
-                write!(f, "{}", bundle)?;
+        let mut j = 0;
+        for (i,bundle) in (&self.schedule).iter().enumerate() {
+            if i == *self.bb_starts.get(j).unwrap() {
+                write!(f, "BasicBlock {}:\n", j)?;
+                j += 1;
             }
+            write!(f, "{}", bundle)?;
         }
         Ok(())
     }
@@ -102,29 +122,23 @@ fn fill_schedule(cyc_end: usize, schedule: &mut Vec<Bundle>) {
     }
 }
 
-fn reserve_slot(schedule: &mut Vec<Bundle>) {
-    if schedule.last().is_none() {
-        schedule.push(Bundle::new(schedule.len()));
-    }
-}
-
-fn min_cycle(starts: &HashMap<usize, usize>, inst: &DepInst) -> usize {
-    inst.all_deps().iter().map(|d| 
+fn min_cycle(starts: &HashMap<usize, usize>, inst: &DepInst, base: usize) -> usize {
+    std::cmp::max(base, inst.all_deps().iter().map(|d| 
         starts.get(&d.addr)
         // unit latency assumed on all units, since we have an interlocking pipeline
         .and_then(|s| Some(*s + 1))
-        .unwrap_or(0))
-    .max().unwrap_or(0)
+        .unwrap_or(base))
+    .max().unwrap_or(base))
 }
 
 fn asap_local(
     starts: &mut HashMap<usize, usize>,
+    base: usize,
     inst: DepInst,
     schedule: &mut Vec<Bundle>,
 ) {
-    let min_cycle = min_cycle(starts, &inst);
+    let min_cycle = min_cycle(starts, &inst, base);
     fill_schedule(min_cycle, schedule);
-    reserve_slot(schedule);
     for slot in schedule.iter_mut().skip(min_cycle) {
         if compatible(slot, &inst) {
             let addr = inst.inst.addr;
@@ -141,28 +155,30 @@ fn asap_local(
     schedule.push(bundle);
 }
 
-fn schedule_basicblock(bb: AnalyzedBasicBlock, starts: &mut HashMap<usize, usize>) -> ScheduledBasicBlock {
-    let mut schedule = Vec::new();
-    for inst in bb.insns {
-        asap_local(starts, inst, &mut schedule);
-    }
-    reserve_slot(&mut schedule);
-    if let Some(cf_insn) = bb.cf_insn {
-        schedule.last_mut().unwrap().branch = Some(cf_insn);
-    }
-    schedule
-}
-
 pub fn schedule_program(prog: AnalyzedProgram) -> ScheduledProgram {
     let mut starts: HashMap<usize, usize> = HashMap::new();
-    let mut bbs: Vec<ScheduledBasicBlock> = Vec::new();
+    let mut schedule = Vec::new();
+    let mut bb_starts = Vec::new();
 
+    let mut base = 0;
     for bb in prog.bbs {
-        bbs.push(schedule_basicblock(bb, &mut starts));
+        bb_starts.push(base);
+        for inst in bb.insns {
+            asap_local(&mut starts, base, inst, &mut schedule);
+        }
+        // need to have at least base number of instructions in the schedule
+        // most of the time will have more, and the branch slots will be empty, so it is ok
+        fill_schedule(base, &mut schedule);
+        if let Some(cf_insn) = bb.cf_insn {
+            starts.insert(cf_insn.inst.addr, base);
+            schedule.last_mut().unwrap().branch = Some(cf_insn);
+        }
+        base = schedule.len();
     }
-
+    
     ScheduledProgram {
         starts,
-        bbs
+        schedule,
+        bb_starts
     }
 }

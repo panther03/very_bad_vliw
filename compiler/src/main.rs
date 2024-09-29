@@ -50,6 +50,18 @@ fn label_auipc(trace: &mut Vec<Inst>) {
     }
 }
 
+fn fix_labels(sp: &mut ScheduledProgram) {
+    for bundle in sp.schedule.iter_mut() {
+        for inst in bundle.valid_insts_mut() {
+            if let Label::SrcAddrSpace(l) = inst.inst.label {
+                let new_addr = sp.starts.get(&l)
+                    .unwrap_or_else(|| panic!("Could not find new label for: {} (inst addr = {})", l, inst.inst.addr));
+                inst.inst.label = Label::DstAddrSpace(*new_addr);
+            }
+        }
+    }
+}
+
 fn core(inp_json_path: &Path) -> ScheduledProgram {
     let mut trace = read_trace(inp_json_path);
     label_auipc(&mut trace);
@@ -58,7 +70,8 @@ fn core(inp_json_path: &Path) -> ScheduledProgram {
         bbs: ap_insns
     };
     println!("{}", ap);
-    let sp = schedule_program(ap);
+    let mut sp = schedule_program(ap);
+    fix_labels(&mut sp);
     sp
     /*
     let bb_analysis = analysis::basicblock_analysis(&trace);

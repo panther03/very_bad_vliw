@@ -59,6 +59,12 @@ There seems to be a couple different addressing schemes we could be worried abou
     - auipc
     - Offset to x0 register
 
+### auipc plan is foiled (kinda)
+
+matmul contains some weird code generation using alternating auipc + store instruction
+using it to access the data section, as before, but it's not generating the extra addi, so it's currently failing
+in general, gcc is being very stupid here, -O2 is on but maybe clang would work better idk
+
 ### plan for now
 
 Make a simple stupid "compiler" which just takes the output from GCC (parsed output from objdump, so I don't have to bother with parsing machine code) and gives a .hex which can be inserted into the original binary, formatted properly for the VLIW.
