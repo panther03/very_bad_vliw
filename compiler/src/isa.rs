@@ -182,6 +182,15 @@ impl Opcode {
             Self::JALR => panic!("jalr will make the universe explode"),
         }
     }
+
+    pub fn is_control_flow(&self) -> bool {
+        match self {
+            Self::BEQ | Self::BNE | Self::BLT |
+            Self::BGE | Self::BLTU | Self::BGEU |
+            Self::J | Self::JAL | Self::JALR | Self::RET => true,
+            _ => false
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -305,8 +314,8 @@ impl fmt::Display for Operand {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub enum Label {
-    SrcAddrSpace(i64),
-    DstAddrSpace(i64),
+    SrcAddrSpace(usize),
+    DstAddrSpace(usize),
     None
 }
 
@@ -368,7 +377,7 @@ fn parse_i_r_b_format_inst(opcode: Opcode, remaining_line: String) -> Result<Ins
                 // TODO REMEMBER TO FLIP SRC1 AND SRC2 !!!!!!!!
                 src1,
                 src2: dest,
-                label: Label::SrcAddrSpace(i),
+                label: Label::SrcAddrSpace(i as usize),
                 offset: None          
             })
         } else { 
@@ -440,7 +449,7 @@ fn parse_j_format_inst(opcode: Opcode, remaining_line: String) -> Result<Inst, S
         dest: Operand::None,
         src1: None,
         src2: Operand::None,
-        label: Label::SrcAddrSpace(i),
+        label: Label::SrcAddrSpace(i as usize),
         offset: None
     })
 }

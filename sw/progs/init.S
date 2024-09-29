@@ -53,10 +53,6 @@ _start:
   call exit
 1:
   j 1b
-  nop
-  nop
-  nop
-  nop
 
 #.section ".tdata.begin"
 #.globl _tdata_begin

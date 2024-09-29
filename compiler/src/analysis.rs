@@ -1,8 +1,6 @@
-use std::{cmp::max, collections::HashMap, fmt, usize::MAX};
+use std::fmt;
 
-use serde_with::SerializeDisplay;
-
-use crate::isa::{ExecutionUnit, Inst, Opcode, Operand};
+use crate::isa::{Inst, Label, Operand};
 
 /*#[derive(Debug)]
 pub struct Producers {
@@ -39,86 +37,45 @@ fn deps_fmt(deps: &Deps, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     Ok(()) 
 }*/
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-pub enum BasicBlockSource {
-    BB0,
-    BB1,
-    BB2,
-}
-
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub struct Producer {
+pub struct Dep {
     pub addr: usize,
-    pub eu: ExecutionUnit,
+    //pub eu: ExecutionUnit,
     pub reg: u32,
-}
-
-#[derive(Debug, Clone)]
-pub enum Dep {
-    Local(Producer),
-    Interloop(Producer,Producer),
-    Invariant(Producer),
-    Postloop(Producer),
-    Fixed(usize),
-    None
-}
-
-impl Dep {
-    pub fn base_addr(&self, starts: &HashMap<usize,usize>) -> Option<usize> {
-        match self {
-            Dep::Local(prod)|Dep::Interloop(_, prod)|Dep::Invariant(prod)|Dep::Postloop(prod) => {
-                starts.get(&prod.addr).copied()
-            }
-            Dep::Fixed(s) => Some(*s),
-            Dep::None => None,
-        }
-    }
-    pub fn latency(&self) -> usize {
-        match self {
-            Dep::Local(prod) => prod.eu.latency(),
-            Dep::Interloop(_, prod) => prod.eu.latency(),
-            Dep::Invariant(prod) => prod.eu.latency(),
-            Dep::Postloop(prod) => prod.eu.latency(),
-            Dep::Fixed(_) => 0,
-            Dep::None => 0,
-        }
-    }
-    pub fn loop_addr(&self) -> Option<usize> {
-        match self {
-            Dep::Interloop(prod, _) => Some(prod.addr),
-            _ => None,
-        }
-    }
-    pub fn loop_latency(&self) -> usize {
-        match self {
-            Dep::Interloop(prod, _) => prod.eu.latency(),
-            _ => 0,
-        }
-    }
 }
 
 impl fmt::Display for Dep {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Dep::Local(prod) => write!(f, "x{}=LC({})", prod.reg, prod.addr),
-            Dep::Interloop(prod1, prod2) => write!(f, "x{}=IL({}, {})", prod1.reg, prod1.addr, prod2.addr),
-            Dep::Invariant(prod) => write!(f, "x{}=IN({})", prod.reg, prod.addr),
-            Dep::Postloop(prod) => write!(f, "x{}=PL({})", prod.reg, prod.addr),
-            Dep::None | Dep::Fixed(_) => write!(f, " "),
-        }
+        write!(f, "x{} @ {}", self.reg, self.addr)
     }
 }
 
-#[derive(Debug, Clone, SerializeDisplay)]
+#[derive(Debug, Clone)]
 pub struct DepInst {
     pub inst: Inst,
-    pub bb: BasicBlockSource,
-    pub dep1: Dep,
-    pub dep2: Dep,
-    pub stage: usize,
-    pub pred: Option<u32>
+    pub false_deps: Vec<Dep>,
+    pub src1: Option<Dep>,
+    pub src2: Option<Dep>
 }
 
+impl fmt::Display for DepInst {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:\t{:<20}|", self.inst.addr, self.inst)?;
+        write!(f, "FD: ")?;
+        for false_dep in self.false_deps.iter() {
+            write!(f, "{} ", false_dep)?;
+        }
+        write!(f, "; TD: ")?;
+        if let Some(src1) = &self.src1 {
+            write!(f, "{} ", src1)?;
+        }
+        if let Some(src2) = &self.src2 {
+            write!(f, "{} ", src2)?;
+        }
+        write!(f, "]\n")
+    }
+}
+/*
 impl DepInst {
     pub fn new(inst: Inst, bb: BasicBlockSource) -> Self {
         DepInst {
@@ -178,19 +135,9 @@ impl DepInst {
     }
 }
 
-pub struct BasicBlockAnalysis {
-    pub bb0_end: usize,
-    pub bb1_end: usize,
-}
 
-#[derive(Clone)]
-pub struct AnalyzedProgram {
-    pub bb0: Vec<DepInst>,
-    pub bb1: Vec<DepInst>,
-    pub bb2: Vec<DepInst>
-}
 
-impl fmt::Display for AnalyzedProgram {
+impl fmt::Display for SerialProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "BB0:\n")?;
         for dep_inst in self.bb0.iter() {
@@ -212,34 +159,22 @@ impl fmt::Display for AnalyzedProgram {
 
 }
 
-Output dependencies: Vec<Consumer>
-Dep1: Producer
-Dep2: Producer 
+//Output dependencies: Vec<Consumer>
+//Dep1: Producer
+//Dep2: Producer 
+//
+//
+//add x0, x1, x1
+//add x1, x2, x3
+//add x3, x1, x0
+//
+//add x1, x0, x0
+//
+//add x1, x2, x3
+//add x3, x1, x0
 
 
-add x0, x1, x1
-add x1, x2, x3
-add x3, x1, x0
 
-add x1, x0, x0
-
-add x1, x2, x3
-add x3, x1, x0
-
-fn match_deps(cons_da: &mut DepInst, prod_inst: &Inst, dep_ctx: &dyn Fn(Producer, &Dep) -> Dep) {
-    if let Operand::Gpr(prod_dest) = prod_inst.dest {
-        let cons_inst = cons_da.inst;
-        let prod = Producer{ addr: prod_inst.addr, eu: prod_inst.opcode.eu_type(), reg: prod_dest };
-        if cons_inst.src1.is_some() && prod_dest == cons_inst.src1.unwrap() {
-            cons_da.dep1 = dep_ctx(prod.clone(), &cons_da.dep1);
-        }
-        if let Operand::Gpr(src2) = cons_inst.src2 {
-            if prod_dest == src2 {
-                cons_da.dep2 = dep_ctx(prod, &cons_da.dep2);
-            }
-        }
-    }
-}
 
 fn handle_local_dep(
     cons_da: &mut DepInst,
@@ -343,56 +278,129 @@ fn bb2_dep_analysis(inst: Inst, da_table: &Vec<DepInst>) -> DepInst {
         );
     }
     cons_da_entry
+}*/
+
+#[derive(Clone)]
+pub struct AnalyzedBasicBlock { 
+    pub insns: Vec<DepInst>,
+    pub cf_insn: Option<DepInst>
 }
 
-pub fn basicblock_analysis(insts: &Vec<Inst>) -> BasicBlockAnalysis {
-    let mut analysis = BasicBlockAnalysis {
-        bb0_end: insts.len(),
-        bb1_end: insts.len(),
-    };
-    let mut multiple_loops = false;
-    for inst in insts.iter() {
-        if inst.opcode == Opcode::LOOP {
-            if multiple_loops {
-                panic!("Multiple loops in trace, not supported");
-            }
+impl fmt::Display for AnalyzedBasicBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for dep_inst in &self.insns {
+            write!(f, "{}", dep_inst)?;
+        }
+        if let Some(cf_insn) = &self.cf_insn {
+            write!(f, "{}", cf_insn)?;
+        }
+        Ok(())
+    }
 
-            let Operand::Immediate(loop_start) = inst.src2 else {
-                panic!("malformed internal loop instruction");
-            };
+}
 
-            if (loop_start as usize) >= inst.addr || loop_start < 0 {
-                panic!("Malformed loop instruction.. loop branches below itself?");
-            }
-            analysis = BasicBlockAnalysis {
-                bb0_end: loop_start as usize,
-                bb1_end: inst.addr + 1,
-            };
-            multiple_loops = true;
+#[derive(Clone)]
+pub struct AnalyzedProgram {
+    pub bbs: Vec<AnalyzedBasicBlock>
+}
+
+impl fmt::Display for AnalyzedProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i,bb) in (&self.bbs).iter().enumerate() {
+            write!(f, "BasicBlock {}:\n{}", i, bb)?;
+        }
+        Ok(())
+    }
+
+}
+
+
+pub fn trace_to_basicblocks(trace: Vec<Inst>) -> Vec<Vec<Inst>> {
+    let mut bb_starts: Vec<usize> = Vec::new();
+    for inst in trace.iter() {
+        if let Label::SrcAddrSpace(l) = inst.label {
+            assert!(l < trace.len()*4);
+            assert!(l % 4 == 0);
+            bb_starts.push(l);
         }
     }
-    analysis
-}
 
-pub fn dep_analysis(insts: Vec<Inst>, bb_analysis: &BasicBlockAnalysis) -> AnalyzedProgram {
-    let mut dep_analysis_table: Vec<DepInst> = Vec::new();
-
-    for inst in insts {
-        if inst.addr < bb_analysis.bb0_end {
-            dep_analysis_table.push(bb0_dep_analysis(inst, &dep_analysis_table));
-        } else if inst.addr < bb_analysis.bb1_end {
-            let inst_clone = inst.clone();
-            let da = bb1_dep_analysis(inst, &dep_analysis_table);
-            dep_analysis_table.push(da);
-            for cons_da in dep_analysis_table.iter_mut().skip(bb_analysis.bb0_end) {
-                promote_bb1_dep(cons_da, &inst_clone);
-            }
+    bb_starts.sort();
+    let mut bbs: Vec<Vec<Inst>> = Vec::new();
+    let mut curr_bb: Vec<Inst> = Vec::new();
+    let trace_len = trace.len();
+    for inst in trace {
+        let cond = inst.opcode.is_control_flow() || (inst.addr == (trace_len - 1)*4);
+        // at the start of a basic block
+        if *(bb_starts.first()).unwrap_or(&0) == inst.addr {
+            bbs.push(curr_bb);
+            curr_bb = vec![inst];
         } else {
-            dep_analysis_table.push(bb2_dep_analysis(inst, &dep_analysis_table));
+            curr_bb.push(inst);
+        }
+
+        // at the end of the basic block? Push what we have
+        // Note that the instruction can be both the start and end of the basic block, in this case we push the one we just created
+        if cond {
+            bbs.push(curr_bb);
+            curr_bb = Vec::new();
         }
     }
+    bbs
+}
 
-    let mut bb1 = dep_analysis_table.split_off(bb_analysis.bb0_end);
-    let bb2 = bb1.split_off(bb_analysis.bb1_end - bb_analysis.bb0_end);
-    AnalyzedProgram{bb0: dep_analysis_table, bb1, bb2}
+fn match_deps(new_da: &mut DepInst, old_inst: &Inst) {
+    // True dependency
+    // We depend on the value from the previous instruction
+    let new_inst = new_da.inst;
+    if let Operand::Gpr(old_dest) = old_inst.dest {
+        let dep = Dep{ addr: old_inst.addr, reg: old_dest };
+        if new_inst.src1.is_some() && old_dest == new_inst.src1.unwrap() {
+            new_da.src1 = Some(dep.clone());
+        }
+        if let Operand::Gpr(src2) = new_inst.src2 {
+            if old_dest == src2 {
+                new_da.src2 = Some(dep);
+            }
+        }
+    }
+    // False dependency
+    // We are writing to a location either used or written to by a previous instruction
+    // With no register renaming, we must be careful to schedule this instruction after that one
+    if let Operand::Gpr(new_dest) = new_inst.dest {
+        let dep = Dep { addr: old_inst.addr, reg: new_dest };
+        if old_inst.src1.is_some() && new_dest == old_inst.src1.unwrap() {
+            new_da.false_deps.push(dep);
+        } else if let Operand::Gpr(src2) = old_inst.src2 {
+            if src2 == new_dest { new_da.false_deps.push(dep); }
+        } else if let Operand::Gpr(old_dest) = old_inst.dest {
+            if old_dest == new_dest { new_da.false_deps.push(dep); }
+        }
+    }
+}
+
+pub fn dep_analysis(basicblock: Vec<Inst>) -> AnalyzedBasicBlock {
+    let mut da_table: Vec<DepInst> = Vec::new();
+    let mut cf_insn: Option<DepInst> = None;
+    for inst in basicblock {
+        let mut dep_inst = DepInst {
+            inst: inst,
+            false_deps: Vec::new(),
+            src1: None,
+            src2: None
+        };
+        for da_entry in da_table.iter() {
+            match_deps(&mut dep_inst, &da_entry.inst);
+        }
+
+        if inst.opcode.is_control_flow() {
+            cf_insn = Some(dep_inst);
+        } else {
+            da_table.push(dep_inst);
+        }
+    }
+    AnalyzedBasicBlock {
+        insns: da_table,
+        cf_insn
+    }
 }

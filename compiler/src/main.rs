@@ -1,3 +1,6 @@
+use analysis::{trace_to_basicblocks,dep_analysis};
+use analysis::AnalyzedProgram;
+use isa::Label;
 //use scheduling::{loop_schedule, ScheduleSlot};
 use serde_json;
 use std::fs;
@@ -6,8 +9,9 @@ use std::io;
 use std::path::Path;
 
 use isa::Inst;
+use isa::Opcode;
 
-//mod analysis;
+mod analysis;
 mod isa;
 //mod regalloc;
 //mod scheduling;
@@ -29,11 +33,29 @@ fn read_trace(inp_asm_path: &Path) -> Vec<Inst> {
         .map(|(i,s)| Inst::from_str(s, i*4).unwrap()).collect()
 }
 
+fn label_auipc(trace: &mut Vec<Inst>) {
+    let mut auipc_pc = -1;
+    for inst in trace.iter_mut() {
+        if auipc_pc >= 0 {
+            if inst.opcode != Opcode::ADDI {
+                panic!("Expected ADDI offset right after AUIPC! Got {}", inst);
+            }
+            inst.offset = Some(auipc_pc);
+            inst.label = Label::SrcAddrSpace(auipc_pc as usize);
+            auipc_pc = -1;
+        } else if inst.opcode == Opcode::AUIPC {
+            auipc_pc = inst.addr as i64;
+        }
+    }
+}
 
-
-fn core(inp_json_path: &Path) -> Vec<Inst> {
-    let trace = read_trace(inp_json_path);
-    trace
+fn core(inp_json_path: &Path) -> AnalyzedProgram {
+    let mut trace = read_trace(inp_json_path);
+    label_auipc(&mut trace);
+    let ap_insns = trace_to_basicblocks(trace).into_iter().map(|bb| dep_analysis(bb)).collect();
+    AnalyzedProgram {
+        bbs: ap_insns
+    }
     /*
     let bb_analysis = analysis::basicblock_analysis(&trace);
     let deps_trace = analysis::dep_analysis(trace, &bb_analysis);
@@ -62,13 +84,18 @@ fn core(inp_json_path: &Path) -> Vec<Inst> {
 
 fn main() {
     let inp_asm_path = std::env::args().nth(1).expect("No input ASM given! (Use STDIN for standard input)");
-    let out_asm_path  = std::env::args().nth(2).expect("No output ASM given!");
+    //let out_asm_path  = std::env::args().nth(2).expect("No output ASM given!");
     let inp_asm_path = Path::new(&inp_asm_path);
-    let out_asm_path = Path::new(&out_asm_path);
+    //let out_asm_path = Path::new(&out_asm_path);
 
     let out_insns = core(inp_asm_path);
-    let out_asm: String = out_insns.into_iter().map(|i| i.to_string()).collect::<Vec<String>>().join("\n");
-    let out_asm = format!(".globl _start\n
-_start:\n{}", out_asm);
-    std::fs::write(out_asm_path, out_asm).unwrap();
+    /*for (i,bb) in out_insns.into_iter().enumerate() {
+        println!("BasicBlock {}", i);
+        let out_asm: String = bb.into_iter().map(|i| i.to_string()).collect::<Vec<String>>().join("\n");
+        println!("{}", out_asm);
+    }*/
+    println!("{}", out_insns);
+    //let out_asm = format!(".globl _start\n
+//_start:\n{}", out_asm);
+    //std::fs::write(out_asm_path, out_asm).unwrap();
 }

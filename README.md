@@ -5,8 +5,10 @@ Including a very bad VLIW compiler
 ## Progress
 
 - [x] Parsing of objdump output 
-- [ ] Coalesce pass for auipc
-- [ ] Updated dependency analysis (w/ False dependencies)
+- [x] Coalesce pass for auipc
+- [x] Split into basic blocks
+- [X] Updated dependency analysis (w/ False dependencies)
+- [ ] Update scheduling
 - [ ] Update labels of branch/jump
 - [ ] Patching hex file and adding offset for loads
 - [ ] Assemble output into hex or figure out why GCC is still generating jump + branch for one branch
@@ -60,6 +62,12 @@ There seems to be a couple different addressing schemes we could be worried abou
 Make a simple stupid "compiler" which just takes the output from GCC (parsed output from objdump, so I don't have to bother with parsing machine code) and gives a .hex which can be inserted into the original binary, formatted properly for the VLIW.
 
 Handle auipc by assuming GCC will probably generate an offset addi insn wherever auipc shows up, and then just coalesce the two instructions together, that way we can adjust the PC offset as one.
+- loop through instructions
+- when auipc is encountered, store its pc
+- the next instruction, we expect to be addi, we modify it with a label that stores the pc to the auipc that was just seen
+- we schedule it as normal
+- we remap the label by using the LUT just like all the other branch/jump instructions
+- handle the Immediate enum type differently by adding the offset with this label (Immediate value - Old PC + new label)
 
 Handle the size difference between the old and new program by adding some data in the first word of the program, storing the size difference between old and new. Every load except for MMIO has this offset applied. This way we don't have to do really any analysis to fix the addresses. (otherwise we'd have to have a way of knowing which instructions are manipulating MMIO and which aren't, and that doesn't sound easy, although it completely depends on what assumptions you make about the program)
 
