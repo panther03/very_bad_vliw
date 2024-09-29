@@ -154,14 +154,21 @@ impl Opcode {
     }
 
     pub fn eu_type(&self) -> ExecutionUnit {
-        /*match self {
-            Self::ADD | Self::ADDI | Self::SUB | Self::MOV => ExecutionUnit::ALU,
-            Self::MULU => ExecutionUnit::Mult,
-            Self::LD | Self::ST => ExecutionUnit::Mem,
-            Self::BEQ | Self::BGE | B => ExecutionUnit::Branch,
-            Self::NOP => ExecutionUnit::ALU, // but why? 
-        }*/
-        ExecutionUnit::ALU
+        match self {
+            Self::ADD | Self::SUB | Self::XOR | Self::OR | 
+            Self::AND | Self::SLL | Self::SRL | Self::SRA |
+            Self::SLT | Self::SLTU | Self::ADDI | Self::XORI |
+            Self::ORI | Self::ANDI | Self::SLLI | Self::SRLI |
+            Self::SRAI | Self::SLTI | Self::STLIU |
+            Self::LUI | Self::AUIPC | Self::MOV | Self::LI => ExecutionUnit::ALU,
+    
+            Self::BEQ | Self::BNE | Self::BLT |
+            Self::BGE | Self::BLTU | Self::BGEU |
+            Self::J | Self::JAL | Self::RET | Self::JALR => ExecutionUnit::Branch,
+            Self::LB | Self::LH | Self::LW | Self::LBU |
+            Self::LHU | Self::SB | Self::SH | Self::SW => ExecutionUnit::Mem,
+            _ => panic!("unrecognized execution unit: {:#?}", self),
+        }
     }
 
     pub fn parse_format(&self) -> InstParseFormat {

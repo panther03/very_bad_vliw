@@ -6,9 +6,9 @@ sra x14,x11,x15
 andi x14,x14,1
 sll x13,x12,x15
 addi x15,x15,1
-beqz x14,28 
+beq x14,x0,0x28 
 add x10,x10,x13
-bne x15,x16,10 
+bne x15,x16,0x10 
 ret 
 li x1,0
 li x2,0
@@ -34,8 +34,8 @@ li x22,0
 li x23,0
 li x24,0
 li x25,0
-li x90,0
-li x91,0
+li x26,0
+li x27,0
 li x28,0
 li x29,0
 li x30,0
@@ -43,20 +43,16 @@ li x31,0
 lui x2,0x3
 addi x2,x2,2044 
 sll x2,x2,x10
-jal 14c 
+jal 0x13c 
 li x10,0
-jal 110 
-j c0 
-nop 
-nop 
-nop 
-nop 
+jal 0x100 
+j 0xc0 
 addi x2,x2,-32
 sw x1,28(x2)
 sw x8,24(x2)
 addi x8,x2,32
 sw x10,-20(x8)
-li x15,512
+li x15,496
 lw x15,0(x15)
 lw x14,-20(x8)
 sw x14,0(x15)
@@ -71,7 +67,7 @@ sw x1,28(x2)
 sw x8,24(x2)
 addi x8,x2,32
 sw x10,-20(x8)
-li x15,516
+li x15,500
 lw x15,0(x15)
 lw x14,-20(x8)
 sw x14,0(x15)
@@ -94,21 +90,21 @@ sra x14,x16,x15
 andi x14,x14,1
 sll x13,x10,x15
 addi x15,x15,1
-beqz x14,188 
+beq x14,x0,0x178 
 add x12,x12,x13
-bne x15,x11,170 
+bne x15,x11,0x160 
 li x15,6
 auipc x8,0x0
 addi x8,x8,96 
 auipc x9,0x0
 addi x9,x9,102 
-beq x12,x15,1d4 
+beq x12,x15,0x1c4 
 lbu x10,0(x8)
 addi x8,x8,1
-jal d4 
-bne x8,x9,1x14 
+jal 0xc4 
+bne x8,x9,0x194 
 li x10,1
-jal 110 
+jal 0x100 
 lw x1,12(x2)
 lw x8,8(x2)
 lw x9,4(x2)
@@ -116,9 +112,9 @@ li x10,0
 addi x2,x2,16
 ret 
 li x10,79
-jal d4 
+jal 0xc4 
 li x10,107
-jal d4 
+jal 0xc4 
 li x10,0
-jal 110 
-j 1bc 
+jal 0x100 
+j 0x1ac 

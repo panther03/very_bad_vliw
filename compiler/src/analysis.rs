@@ -2,40 +2,6 @@ use std::fmt;
 
 use crate::isa::{Inst, Label, Operand};
 
-/*#[derive(Debug)]
-pub struct Producers {
-    addr: usize,
-    loop_addr: Option<usize>,
-}
-
-impl fmt::Display for Producers {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.loop_addr {
-            Some(loop_addr) => write!(f, "{} or {}", self.addr, loop_addr),
-            None => write!(f, "{}", self.addr),
-        }
-    }
-}
-
-fn deps_fmt(deps: &Deps, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut first = true;
-    let mut remaining = 10;
-    for (reg, producers) in deps.iter() {
-        if !first {
-            write!(f, ", ")?;
-            remaining -= 2;
-        }
-        let producers_string = format!("{}: {}", reg, producers);
-        write!(f, "{}", producers_string)?;
-        remaining -= producers_string.len();
-        first = false;
-    }
-    if remaining > 0 {
-        write!(f, "{: <1$}", "", remaining)?;
-    }
-    write!(f, "| ")?;
-    Ok(()) 
-}*/
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub struct Dep {
@@ -58,6 +24,22 @@ pub struct DepInst {
     pub src2: Option<Dep>
 }
 
+impl DepInst {
+    pub fn all_deps<'a>(&'a self) -> Vec<&'a Dep> {
+        let mut deps: Vec<&'a Dep> = Vec::new();
+        if let Some(src1) = &self.src1 {
+            deps.push(src1);
+        }
+        if let Some(src2) = &self.src2 {
+            deps.push(src2);
+        }
+        for dep in self.false_deps.iter() {
+            deps.push(dep);
+        }
+        deps
+    }
+}
+
 impl fmt::Display for DepInst {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:\t{:<20}|", self.inst.addr, self.inst)?;
@@ -75,210 +57,6 @@ impl fmt::Display for DepInst {
         write!(f, "]\n")
     }
 }
-/*
-impl DepInst {
-    pub fn new(inst: Inst, bb: BasicBlockSource) -> Self {
-        DepInst {
-            inst,
-            bb,
-            dep1: Dep::None,
-            dep2: Dep::None,
-            stage: 0,
-            pred: None
-        }
-    }
-    
-    pub fn with_dep(mut self, dep: Dep) -> Self {
-        self.dep1 = dep;
-        self
-    }
-}
-
-impl fmt::Display for DepInst {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(p) = self.pred {
-            write!(f, "(p{}) {}", p, self.inst)
-        } else {
-            write!(f, "{}", self.inst)
-        }
-    }
-}
-
-impl DepInst {
-    pub fn analysis_dbg_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:<3} | {:<5} | {:?} | {:<3} | {} | {} ??? ",
-            self.inst.addr,
-            self.inst.opcode.to_str(),
-            self.bb,
-            format!("{}", self.inst.dest).as_str(),
-            self.dep1,
-            self.dep2
-        )?;
-        //deps_fmt(&self.local_deps, f)?;
-        //deps_fmt(&self.interloop_deps, f)?;
-        //deps_fmt(&self.invariant_deps, f)?;
-        //deps_fmt(&self.postloop_deps, f)?;
-        Ok(())
-    }
-
-    pub fn all_deps<'a>(&'a mut self) -> Vec<(&'a Dep, &'a mut u32)> {
-        let mut deps: Vec<(&'a Dep, &'a mut u32)> = Vec::new();
-        if let Some(reg1) = &mut self.inst.src1 {
-            deps.push((&self.dep1, reg1));
-        }
-        if let Operand::Gpr(reg2) = &mut self.inst.src2 {
-            deps.push((&self.dep2, reg2));
-        }
-        deps
-    }
-}
-
-
-
-impl fmt::Display for SerialProgram {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BB0:\n")?;
-        for dep_inst in self.bb0.iter() {
-            dep_inst.analysis_dbg_fmt(f)?;
-            write!(f, "\n")?;
-        }
-        write!(f, "BB1:\n")?;
-        for dep_inst in self.bb1.iter() {
-            dep_inst.analysis_dbg_fmt(f)?;
-            write!(f, "\n")?;
-        }
-        write!(f, "BB2:\n")?;
-        for dep_inst in self.bb2.iter() {
-            dep_inst.analysis_dbg_fmt(f)?;
-            write!(f, "\n")?;
-        }
-        Ok(())
-    }
-
-}
-
-//Output dependencies: Vec<Consumer>
-//Dep1: Producer
-//Dep2: Producer 
-//
-//
-//add x0, x1, x1
-//add x1, x2, x3
-//add x3, x1, x0
-//
-//add x1, x0, x0
-//
-//add x1, x2, x3
-//add x3, x1, x0
-
-
-
-
-fn handle_local_dep(
-    cons_da: &mut DepInst,
-    prod_bb: BasicBlockSource,
-    prod_inst: &Inst,
-) {
-    // must be in same basic block for a local dependency
-    if cons_da.bb != prod_bb {
-        return 
-    }
-    match_deps(cons_da, prod_inst, &|p, _| { Dep::Local(p) });
-}
-
-fn handle_invariant_dep(
-    cons_da: &mut DepInst,
-    prod_bb: BasicBlockSource,
-    prod_inst: &Inst,
-) {
-    // Invariants are produced in BB0
-    if prod_bb != BasicBlockSource::BB0 {
-        return;
-    }
-    match_deps(cons_da, prod_inst, &|p, _| { Dep::Invariant(p) });
-}
-
-fn handle_postloop_dep(
-    cons_da: &mut DepInst,
-    prod_bb: BasicBlockSource,
-    prod_inst: &Inst,
-) {
-    // Postloop deps come from the loop
-    if prod_bb != BasicBlockSource::BB1 {
-        return;
-    }
-    match_deps(cons_da, prod_inst, &|p, _| { Dep::Postloop(p) });
-}
-
-fn bb0_dep_analysis(inst: Inst, da_table: &Vec<DepInst>) -> DepInst {
-    let mut cons_da_entry = DepInst::new(inst, BasicBlockSource::BB0);
-    for da_entry in da_table.iter() {
-        handle_local_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst,
-        );
-    }
-    cons_da_entry
-}
-
-fn bb1_dep_analysis(inst: Inst, da_table: &Vec<DepInst>) -> DepInst {
-    let mut cons_da_entry = DepInst::new(inst, BasicBlockSource::BB1);
-    for da_entry in da_table.iter() {
-        handle_invariant_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst,
-        );
-        handle_local_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst
-        );
-    }
-    cons_da_entry
-}
-
-fn promote_bb1_dep(cons_da: &mut DepInst, prod_inst: &Inst) {
-    match_deps(cons_da, prod_inst, &|p, d| {
-        match d {
-            Dep::Invariant(i) => {
-                Dep::Interloop(p, i.clone())
-            }
-            Dep::Interloop(_, ii) => {
-                Dep::Interloop(p, ii.clone())
-            }
-            Dep::Local(_) => { d.clone() }
-            _ => {
-                panic!("Interloop dependency has no producer in BB0")
-            }
-        }
-    });
-}
-
-fn bb2_dep_analysis(inst: Inst, da_table: &Vec<DepInst>) -> DepInst {
-    let mut cons_da_entry = DepInst::new(inst, BasicBlockSource::BB2);
-    for da_entry in da_table.iter() {
-        handle_invariant_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst,
-        );
-        handle_postloop_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst,
-        );
-        handle_local_dep(
-            &mut cons_da_entry,
-            da_entry.bb,
-            &da_entry.inst,
-        );
-    }
-    cons_da_entry
-}*/
 
 #[derive(Clone)]
 pub struct AnalyzedBasicBlock { 
@@ -311,7 +89,6 @@ impl fmt::Display for AnalyzedProgram {
         }
         Ok(())
     }
-
 }
 
 

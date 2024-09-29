@@ -1,6 +1,7 @@
 use analysis::{trace_to_basicblocks,dep_analysis};
 use analysis::AnalyzedProgram;
 use isa::Label;
+use scheduling::{ScheduledProgram,schedule_program};
 //use scheduling::{loop_schedule, ScheduleSlot};
 use serde_json;
 use std::fs;
@@ -14,7 +15,7 @@ use isa::Opcode;
 mod analysis;
 mod isa;
 //mod regalloc;
-//mod scheduling;
+mod scheduling;
 //mod finalization;
 
 fn read_trace(inp_asm_path: &Path) -> Vec<Inst> {
@@ -49,13 +50,16 @@ fn label_auipc(trace: &mut Vec<Inst>) {
     }
 }
 
-fn core(inp_json_path: &Path) -> AnalyzedProgram {
+fn core(inp_json_path: &Path) -> ScheduledProgram {
     let mut trace = read_trace(inp_json_path);
     label_auipc(&mut trace);
     let ap_insns = trace_to_basicblocks(trace).into_iter().map(|bb| dep_analysis(bb)).collect();
-    AnalyzedProgram {
+    let ap = AnalyzedProgram {
         bbs: ap_insns
-    }
+    };
+    println!("{}", ap);
+    let sp = schedule_program(ap);
+    sp
     /*
     let bb_analysis = analysis::basicblock_analysis(&trace);
     let deps_trace = analysis::dep_analysis(trace, &bb_analysis);

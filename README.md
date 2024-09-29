@@ -4,11 +4,13 @@ Including a very bad VLIW compiler
 
 ## Progress
 
+TODO: why is _start not at 0 in the elf output ?
+
 - [x] Parsing of objdump output 
 - [x] Coalesce pass for auipc
 - [x] Split into basic blocks
 - [X] Updated dependency analysis (w/ False dependencies)
-- [ ] Update scheduling
+- [X] Update scheduling
 - [ ] Update labels of branch/jump
 - [ ] Patching hex file and adding offset for loads
 - [ ] Assemble output into hex or figure out why GCC is still generating jump + branch for one branch
