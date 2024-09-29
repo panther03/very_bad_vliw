@@ -1,0 +1,3 @@
+/target
+given_tests/**/simple.json
+given_tests/**/pip.json
