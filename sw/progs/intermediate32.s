@@ -1,6 +1,6 @@
-	.file	"sub.c"
+	.file	"xor.c"
 	.option nopic
-	.attribute arch, "rv32i2p0"
+	.attribute arch, "rv32i2p1"
 	.attribute unaligned_access, 0
 	.attribute stack_align, 16
 	.text
@@ -9,7 +9,8 @@
 	.globl	main
 	.type	main, @function
 main:
-	li	a0,7
+	li	a0,76
 	ret
 	.size	main, .-main
-	.ident	"GCC: () 9.3.0"
+	.ident	"GCC: (Arch Linux Repositories) 14.1.0"
+	.section	.note.GNU-stack,"",@progbits

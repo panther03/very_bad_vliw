@@ -19,7 +19,7 @@ int arrEquals(int a[SIZE][SIZE], int b[SIZE][SIZE])
     {
         for (int j = 0; j < SIZE; j++)
         {
-            putchar((char)a[i][j]+33);
+            //putchar((char)a[i][j]+33);
         //    *((volatile int *)0xF000fff0) = (char)a[i][j]+33;
             if (a[i][j] != b[i][j])
             {
@@ -163,7 +163,7 @@ int main()
     b[3][3] = 6;
 
     int sum;
-    putchar('a');
+    //putchar('a');
     for (int i = 0; i < SIZE; i++)
     {
         for (int j = 0; j < SIZE; j++)
@@ -173,7 +173,7 @@ int main()
             {
                 sum += multiply(a[i][k], b[k][j]);
             }
-            putchar((char)sum+33);
+    ///        putchar((char)sum+33);
             c[i][j] = sum;
         }
     }

@@ -1,3 +1,5 @@
+# Note: This is out of date and from the CS629 project this is based off of
+
 ## Building/Running
 
 `make` builds all Bluespec programs in `hw/tb/` by default, and synthesizes `hw/top/TopCore.bsv` to Verilog. `NineCoreNoCTest` is the main module with the 9 cores hooked up with a NoC. Use `make NineCoreNocTest` to build this one specifically.

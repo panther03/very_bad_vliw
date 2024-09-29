@@ -212,6 +212,20 @@ impl fmt::Display for AnalyzedProgram {
 
 }
 
+Output dependencies: Vec<Consumer>
+Dep1: Producer
+Dep2: Producer 
+
+
+add x0, x1, x1
+add x1, x2, x3
+add x3, x1, x0
+
+add x1, x0, x0
+
+add x1, x2, x3
+add x3, x1, x0
+
 fn match_deps(cons_da: &mut DepInst, prod_inst: &Inst, dep_ctx: &dyn Fn(Producer, &Dep) -> Dep) {
     if let Operand::Gpr(prod_dest) = prod_inst.dest {
         let cons_inst = cons_da.inst;
