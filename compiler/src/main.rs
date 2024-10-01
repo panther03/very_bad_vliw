@@ -1,5 +1,6 @@
 use analysis::{trace_to_basicblocks,dep_analysis};
 use analysis::AnalyzedProgram;
+use assembler::{assemble, assemble_ap};
 use isa::Label;
 use scheduling::{ScheduledProgram,schedule_program};
 //use scheduling::{loop_schedule, ScheduleSlot};
@@ -14,9 +15,8 @@ use isa::Opcode;
 
 mod analysis;
 mod isa;
-//mod regalloc;
 mod scheduling;
-//mod finalization;
+mod assembler;
 
 fn read_trace(inp_asm_path: &Path) -> Vec<Inst> {
 
@@ -41,7 +41,7 @@ fn label_auipc(trace: &mut Vec<Inst>) {
             if inst.opcode != Opcode::ADDI {
                 panic!("Expected ADDI offset right after AUIPC! Got {}", inst);
             }
-            inst.offset = Some(auipc_pc);
+            inst.offset = Some(-1 * auipc_pc);
             inst.label = Label::SrcAddrSpace(auipc_pc as usize);
             auipc_pc = -1;
         } else if inst.opcode == Opcode::AUIPC {
@@ -62,57 +62,72 @@ fn fix_labels(sp: &mut ScheduledProgram) {
     }
 }
 
-fn core(inp_json_path: &Path) -> ScheduledProgram {
+fn core(inp_json_path: &Path, args: &Args) -> String {
     let mut trace = read_trace(inp_json_path);
-    label_auipc(&mut trace);
+    let orig_size = trace.len() * 4;
+    if !args.skip_vliw {
+        // remove nops
+        trace = trace.into_iter().filter(|i| i.opcode != Opcode::NOP).collect();
+        label_auipc(&mut trace);
+    }
     let ap_insns = trace_to_basicblocks(trace).into_iter().map(|bb| dep_analysis(bb)).collect();
     let ap = AnalyzedProgram {
         bbs: ap_insns
     };
-    println!("{}", ap);
-    let mut sp = schedule_program(ap);
-    fix_labels(&mut sp);
-    sp
-    /*
-    let bb_analysis = analysis::basicblock_analysis(&trace);
-    let deps_trace = analysis::dep_analysis(trace, &bb_analysis);
-    // println!("{}", deps_trace);
-    if deps_trace.bb1.len() > 0 {
-        let nopip_schedule = loop_schedule(deps_trace.clone(), false);
-        let pip_schedule = loop_schedule(deps_trace, true);
-        // println!("Non-Pipelined schedule");
-        // println!("{}", nopip_schedule);
-
-        // println!("Pipelined schedule (II={})", pip_schedule.bb1.len());
-        // println!("{}", pip_schedule);
-
-        let regalloced_nopip = regalloc::reg_alloc_nopip(nopip_schedule);
-        let regalloced_pip = regalloc::reg_alloc_pip(pip_schedule);
-        let finalized_pip = finalization::finalize(regalloced_pip);
-        (regalloced_nopip, finalized_pip)
+    if !args.skip_vliw {  
+        let mut sp = schedule_program(ap);
+        fix_labels(&mut sp);
+        if !args.skip_assemble {
+            assemble(&sp, orig_size, args.bytes_hex)
+        } else {
+            format!("{}", sp)
+        }
     } else {
-        let schedule = loop_schedule(deps_trace, false);
-        // println!("Schedule (no BB1)");
-        // println!("{}", schedule);
-        let regalloced = regalloc::reg_alloc_nopip(schedule);
-        (regalloced.clone(), regalloced)
-    }*/
+        if !args.skip_assemble {
+            assemble_ap(&ap, args.bytes_hex, args.disassembly)
+        } else { 
+            format!("{}", ap)
+        }
+    }
+}
+
+use clap::Parser;
+
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    // Input ASM file (STDIN works)
+    inpasm: String,
+
+    // Output file (default is STDOUT)
+    #[arg(short,long,default_value="STDOUT")]
+    out: String,
+
+    #[arg(short='a',long)]
+    skip_assemble: bool,
+
+    #[arg(short='b',long)]
+    bytes_hex: bool,
+
+    #[arg(short='d',long)]
+    disassembly: bool,
+
+    #[arg(short='v',long)]
+    skip_vliw: bool,
 }
 
 fn main() {
-    let inp_asm_path = std::env::args().nth(1).expect("No input ASM given! (Use STDIN for standard input)");
-    //let out_asm_path  = std::env::args().nth(2).expect("No output ASM given!");
-    let inp_asm_path = Path::new(&inp_asm_path);
+    let args = Args::parse();
+    let inp_asm_path = Path::new(&args.inpasm);
     //let out_asm_path = Path::new(&out_asm_path);
-
-    let out_insns = core(inp_asm_path);
-    /*for (i,bb) in out_insns.into_iter().enumerate() {
-        println!("BasicBlock {}", i);
-        let out_asm: String = bb.into_iter().map(|i| i.to_string()).collect::<Vec<String>>().join("\n");
-        println!("{}", out_asm);
-    }*/
-    println!("{}", out_insns);
-    //let out_asm = format!(".globl _start\n
-//_start:\n{}", out_asm);
-    //std::fs::write(out_asm_path, out_asm).unwrap();
+    
+    let out_insns = core(inp_asm_path,&args);
+        
+    if &args.out == "STDOUT" {
+        println!("{}", out_insns);
+    } else {
+        let out_path = Path::new(&args.out);
+        std::fs::write(out_path, out_insns).unwrap();
+    }
 }

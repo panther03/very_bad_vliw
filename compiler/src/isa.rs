@@ -181,12 +181,95 @@ impl Opcode {
             Self::STLIU => InstParseFormat::I,
             Self::BEQ | Self::BNE | Self::BLT |
             Self::BGE | Self::BLTU | Self::BGEU => InstParseFormat::B,
-            Self::LB | Self::LH | Self::LW | Self::LBU => InstParseFormat::L,
-            Self::LHU | Self::SB | Self::SH | Self::SW => InstParseFormat::S,
+            Self::LB | Self::LH | Self::LW | Self::LBU | Self::LHU => InstParseFormat::L,
+            Self::SB | Self::SH | Self::SW => InstParseFormat::S,
             Self::J | Self::JAL => InstParseFormat::J,
             Self::LUI | Self::AUIPC | Self::MOV | Self::LI => InstParseFormat::MOV,
             Self::NOP | Self::RET => InstParseFormat::NOP,
             Self::JALR => panic!("jalr will make the universe explode"),
+        }
+    }
+
+    pub fn opcode_bits(&self) -> u32 {
+        match self.parse_format() {
+            InstParseFormat::R => 0b0110011,
+            InstParseFormat::I => 0b0010011,
+            InstParseFormat::L => 0b0000011,
+            InstParseFormat::S => 0b0100011,
+            InstParseFormat::B => 0b1100011,
+            InstParseFormat::J => {
+                match self {
+                    Self::J => 0b1101111,
+                    Self::JAL => 0b1101111,
+                    Self::JALR => 0b1100111,
+                    _ => unreachable!()
+                }
+            },
+            _ => {
+                match self {
+                    Self::LUI => 0b0110111,
+                    Self::AUIPC => 0b0010111,
+                    Self::MOV => 0b0010011, // TODO
+                    Self::LI => 0b0010011,
+                    Self::RET => 0b1100111,
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    pub fn funct3(&self) -> u32 {
+        match self {
+            Self::ADD => 0x0,
+            Self::SUB => 0x0,
+            Self::XOR => 0x4,
+            Self::OR => 0x6,
+            Self::AND => 0x7,
+            Self::SLL => 0x1,
+            Self::SRL => 0x5,
+            Self::SRA => 0x5,
+            Self::SLT => 0x2,
+            Self::SLTU => 0x3,
+            Self::ADDI => 0x0,
+            Self::XORI => 0x4,
+            Self::ORI => 0x6,
+            Self::ANDI => 0x7,
+            Self::SLLI => 0x1,
+            Self::SRLI => 0x5,
+            Self::SRAI => 0x5,
+            Self::SLTI => 0x2,
+            Self::STLIU => 0x3,
+            Self::LB => 0x0,
+            Self::LH => 0x1,
+            Self::LW => 0x2,
+            Self::LBU => 0x4,
+            Self::LHU => 0x5,
+            Self::SB => 0x0,
+            Self::SH => 0x1,
+            Self::SW => 0x2,
+            Self::BEQ => 0x0,
+            Self::BNE => 0x1,
+            Self::BLT => 0x4,
+            Self::BGE => 0x5, 
+            Self::BLTU => 0x6,
+            Self::BGEU => 0x7,
+            Self::JAL => 0x0,
+            Self::JALR => 0x0,
+            Self::RET => 0x0,
+            Self::LUI => 0x0,
+            Self::AUIPC => 0x0,
+            // TODO
+            Self::LI => 0x0,
+            Self::MOV => 0x0,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn funct7(&self) -> u32 {
+        match self {
+            Self::SUB => 0x20,
+            Self::SRA => 0x20,
+            _ => 0x0,
         }
     }
 
@@ -453,7 +536,8 @@ fn parse_j_format_inst(opcode: Opcode, remaining_line: String) -> Result<Inst, S
     Ok(Inst {
         opcode,
         addr: 0,
-        dest: Operand::None,
+        // TODO handle jump and link which is not using the link register
+        dest: Operand::Gpr(if opcode == Opcode::JAL {1} else {0}),
         src1: None,
         src2: Operand::None,
         label: Label::SrcAddrSpace(i as usize),
@@ -488,7 +572,7 @@ fn parse_mov_format_inst(opcode: Opcode, remaining_line: String) -> Result<Inst,
         opcode,
         addr: 0,
         dest,
-        src1: None,
+        src1: Some(0),
         src2: src,
         label: Label::None,
         offset: None

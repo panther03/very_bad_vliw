@@ -43,6 +43,15 @@ impl Bundle {
         }
         insts
     }
+
+    pub fn insts<'a>(&'a self) -> Vec<&'a Option<DepInst>> {
+        let mut insts = Vec::new();
+        insts.push(&self.mem);
+        insts.push(&self.branch);
+        insts.push(&self.alu0);
+        insts.push(&self.alu1);
+        insts
+    }
 }
 
 impl fmt::Display for Bundle {
@@ -179,6 +188,6 @@ pub fn schedule_program(prog: AnalyzedProgram) -> ScheduledProgram {
     ScheduledProgram {
         starts,
         schedule,
-        bb_starts
+        bb_starts,
     }
 }

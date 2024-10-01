@@ -81,14 +81,15 @@ def parse_objdump(objdump_output):
     return '\n'.join(asm_lines)
 
 if __name__ == "__main__":
-    assert len(sys.argv) == 3
+    assert len(sys.argv) >= 3
     input_elf = sys.argv[1]
     output_hex = sys.argv[2]
 
     objdump_output = subprocess.run([CC_PREFIX + "objdump", "-d", input_elf], capture_output=True)
     input_asm = parse_objdump(objdump_output.stdout.decode('utf-8'))
-    print(input_asm)
-#    temp_out_asm = tempfile.mktemp()
-    new_out_asm = subprocess.run(["target/release/hw2", "STDIN", "out.asm"], input=input_asm.encode("utf-8"), capture_output=True)
+    if len(sys.argv) >= 4 and sys.argv[3] == "inponly":
+        print(input_asm)
+        exit(0)
+    new_out_asm = subprocess.run(["target/release/hw2", "STDIN", "-o", "out.asm"], input=input_asm.encode("utf-8"), capture_output=True)
     print("======= RESULT =======")
     print(new_out_asm.stdout.decode('utf-8'))

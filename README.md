@@ -11,10 +11,24 @@ TODO: why is _start not at 0 in the elf output ?
 - [x] Split into basic blocks
 - [X] Updated dependency analysis (w/ False dependencies)
 - [X] Update scheduling
-- [ ] Update labels of branch/jump
+- [X] Update labels of branch/jump
 - [ ] Patching hex file and adding offset for loads
-- [ ] Assemble output into hex or figure out why GCC is still generating jump + branch for one branch
+- [X] Assemble output into hex or figure out why GCC is still generating jump + branch for one branch
 - [ ] CPU support for global load offset
+- [ ] Compile & run matmul32 + Show that IPC is > 1
+- [ ] Test a function pointer, see what code is generated
+
+longer term 
+
+- super basic 8086 interpreter
+- Instruction compression (v2 VLIW)
+- Real compiler from LLVM or QBE
+- 8086 jit (no elp from HW; not using dynamic traces to compile)
+  - study how existing ones work
+- fancy DBT
+- I/O 
+- boot DOS
+- FPGA
 
 ## Random Notes
 
