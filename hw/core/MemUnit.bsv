@@ -11,6 +11,7 @@ typedef struct {
     Bit#(32) inst;
     Bit#(3) funct3;
     Bit#(32) pc;
+    Bit#(32) addr_offset;
 } MemRequest deriving (Bits);
 
 typedef struct { Bool we; Bool isUnsigned; Bit#(2) size; Bit#(2) offset; Bool mmio; } MemBusiness deriving (Eq, FShow, Bits);
@@ -107,6 +108,7 @@ module mkMemUnit#(MemUnitInput inIfc, Bool respOnStore)(MemUnit);
 `ifdef KONATA_ENABLE
             labelKonataLeft(lfh,current_id, $format(" (MEM)", fshow(req)));
 `endif
+            req.addr = req.addr + m.addr_offset;
             toDmem.enq(req);
         end
 

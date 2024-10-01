@@ -107,16 +107,19 @@ module mkVLIW(RVIfc);
     ////////////////
     // CPU state //
     //////////////
-    Ehr#(2, Bit#(32)) pc <- mkEhr(32'h0);
+    Ehr#(2, Bit#(32)) pc <- mkEhr(32'h10);
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'h0);
 
     MultiportRam#(4, Bit#(32)) rf <- mkMultiportRam(32'h0);
     MultiportRam#(8, Bool) sc <- mkMultiportRam(True);
 
     Reg#(Bool) starting <- mkReg(True);
+    Reg#(Bool) offsetting <- mkReg(True);
 
     RWire#(Vector#(4, Bit#(5))) sc_insert_dsts <- mkRWire;
     RWire#(Vector#(4, Bit#(5))) sc_remove_dsts <- mkRWire;
+
+    Reg#(Bit#(32)) addr_offset <- mkReg(0);
 
     ///////////////////////
     // Functional Units //
@@ -147,7 +150,17 @@ module mkVLIW(RVIfc);
     ////////////
     // Rules //
     //////////
-    rule init if (starting);
+    rule init if (offsetting);
+        offsetting <= False;
+        let req = IMem {byte_en: 0, addr: 0, data: ?};
+        toImem.enq(req);
+    endrule
+
+    rule getOffset if (starting);
+        let resp = fromImem.first();
+        fromImem.deq();
+        Vector#(4, Word) bundle = unpack(resp.data);
+        addr_offset <= bundle[0];
         starting <= False;
     endrule
 
@@ -182,6 +195,7 @@ module mkVLIW(RVIfc);
         Bit#(32) pc_next = pc[0] + 16;
 
         pc[0] <= pc_next;
+        if (pc_next[3:0] != 0) $display("Unaligned PC @ ", pc_next);
 
         let req = IMem {byte_en: 0, addr: pc[0], data: ?};
         toImem.enq(req);
@@ -337,7 +351,8 @@ module mkVLIW(RVIfc);
                     imm: imm,
                     inst: dis[0].inst,
                     funct3: funct3,
-                    pc: i2e_result.fi.ppc
+                    pc: i2e_result.fi.ppc,
+                    addr_offset: addr_offset
                 });
             end
 

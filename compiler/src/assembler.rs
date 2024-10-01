@@ -121,7 +121,9 @@ fn le_word(word: u32) -> String {
 pub fn assemble (sp: &ScheduledProgram, orig_size: usize, bytes_hex: bool) -> String { 
     let mut output = String::new();
 
-    output.push_str(format!("{}\n", (sp.schedule.len()*16 - orig_size)).as_str());
+    let offset = (sp.schedule.len()*16 - orig_size + 16) as i32;
+    assert!(offset > 0);
+    output.push_str(format!("@0\n{}\n0\n0\n0\n", offset).as_str());
     for bundle in sp.schedule.iter() {
         for inst in bundle.insts() {
             let word = if let Some(inst) = inst {
@@ -139,7 +141,7 @@ pub fn assemble (sp: &ScheduledProgram, orig_size: usize, bytes_hex: bool) -> St
             }
         }
     }
-
+    output.push_str(format!("@{:x}", sp.schedule.len()*16 + 16).as_str());
     output
 }
 

@@ -80,6 +80,15 @@ def parse_objdump(objdump_output):
             asm_lines.append(op + " " + operands)
     return '\n'.join(asm_lines)
 
+def finalize_hex(output_hex, new_out_hex):
+    data_hex_lines = []
+    with open(output_hex, "r") as f:
+        data_hex_lines = f.readlines()
+    with open(output_hex, "w") as f:
+        f.write(new_out_hex.decode("utf-8"))
+        f.writelines([word.lower()+'\n' for line in filter(lambda l: not l.startswith("@"), data_hex_lines) for word in line.split()])
+        
+
 if __name__ == "__main__":
     assert len(sys.argv) >= 3
     input_elf = sys.argv[1]
@@ -90,6 +99,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 4 and sys.argv[3] == "inponly":
         print(input_asm)
         exit(0)
-    new_out_asm = subprocess.run(["target/release/hw2", "STDIN", "-o", "out.asm"], input=input_asm.encode("utf-8"), capture_output=True)
-    print("======= RESULT =======")
-    print(new_out_asm.stdout.decode('utf-8'))
+    new_out_hex = subprocess.run(["target/release/hw2", "STDIN", "-o", "STDOUT"], input=input_asm.encode("utf-8"), capture_output=True)
+    subprocess.run([CC_PREFIX + "objcopy","-O","verilog","--verilog-data-width","4","-R",".text",input_elf,output_hex])
+    finalize_hex(output_hex, new_out_hex.stdout)
+    
