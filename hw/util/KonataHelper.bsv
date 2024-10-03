@@ -88,6 +88,16 @@ function Action commitKonata(File f, KonataId konataCtr, Reg#(KonataId) konataCm
     endaction
 endfunction
 
+function Action nCommitKonata(File f, KonataId konataCtr, Reg#(KonataId) konataCmt, Integer n);
+    action
+        konataCmt <= konataCmt + 4;
+//        $display("[KONATA]E\t%d\t%d\t%s",konataCtr,0,"W");   
+        for (Integer j = 0; j < n; j = j + 1) begin 
+            $fdisplay(f,"R\t%d\t%d\t%d",konataCtr + fromInteger(j),konataCmt+fromInteger(j),0);
+        end
+    endaction
+endfunction
+
 function Action labelKonataLeft(File f, KonataId konataCtr, Fmt s);
     action
         // Squash have id 0

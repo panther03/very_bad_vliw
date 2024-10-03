@@ -38,6 +38,8 @@ module mkBranchUnit#(BranchUnitInput inIfc)(BranchUnit);
             $display("taken!");
             extPC[1] <= controlResult.nextPC; 
             extEpoch[0] <= ~extEpoch[0];
+        end else begin
+            $display("not taken ", fshow(b.inst));
         end
         results.enq(data);
     endmethod

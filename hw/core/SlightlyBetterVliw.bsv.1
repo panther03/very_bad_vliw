@@ -1,5 +1,5 @@
 `define KONATA_ENABLE
-//`define DEBUG_ENABLE
+`define DEBUG_ENABLE
 `include "Logging.bsv"
 
 import FIFO::*;
@@ -107,7 +107,7 @@ module mkVLIW(RVIfc);
     ////////////////
     // CPU state //
     //////////////
-    Ehr#(2, Bit#(32)) pc <- mkEhr(32'h0);
+    Ehr#(2, Bit#(32)) pc <- mkEhr(32'h10);
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'h0);
 
     MultiportRam#(4, Bit#(32)) rf <- mkMultiportRam(32'h0);
@@ -197,13 +197,13 @@ module mkVLIW(RVIfc);
         pc[0] <= pc_next;
         if (pc_next[3:0] != 0) $display("Unaligned PC @ ", pc_next);
 
-        let req = IMem {byte_en: 0, addr: pc[0] + 16, data: ?};
+        let req = IMem {byte_en: 0, addr: pc[0], data: ?};
         toImem.enq(req);
 
 `ifdef KONATA_ENABLE
         // Trigger konata
-        let iid <- fetch1Konata(lfh, fresh_id, 0);
-        labelKonataLeft(lfh, iid, $format("0x%x: ", pc[0]));
+        let iid <- nfetchKonata(lfh, fresh_id, 0, 4);
+        //labelKonataLeft(lfh, iid, $format("0x%x: ", pc[0]));
 `endif 
 
         `DEBUG_PRINT(("[cyc=%d] Fetch @ %x", cyc, pc[0]))
@@ -260,11 +260,13 @@ module mkVLIW(RVIfc);
 
 
 `ifdef KONATA_ENABLE
-            decodeKonata(lfh, f2d_result.k_id);
+            for (Integer i = 0; i < 4; i = i + 1) begin
+                decodeKonata(lfh, f2d_result.k_id + fromInteger(i));
+            end
 //            labelKonataLeft(lfh,f2d_result.k_id, $format("RD=%d | rf[RS1=%d]=%x | rf[RS2=%d]=%d", rd_idx, rs1_idx, rs1, rs2_idx, rs2));
 `endif
 
-            `DEBUG_PRINT(("[cyc=%d] Decode @ %x ", cyc, f2d_result.fi.ppc, fshow(bundle)))
+            `DEBUG_PRINT(("[cyc=%d] Decode @ %x", cyc, f2d_result.fi.ppc))
 
             d2i.enq(D2I {
 `ifdef KONATA_ENABLE
@@ -300,7 +302,9 @@ module mkVLIW(RVIfc);
         `DEBUG_PRINT(("[cyc=%d] Issue @ %x", cyc, d2i_result.fi.ppc))
 
 `ifdef KONATA_ENABLE
-        issueKonata(lfh, d2i_result.k_id);
+        for (Integer i = 0; i < 4; i = i + 1) begin
+            issueKonata(lfh, d2i_result.k_id + fromInteger(i));
+        end
         //labelKonataLeft(lfh,fetchedInstr.k_id, $format("RD=%d | rf[RS1=%d]=%x | rf[RS2=%d]=%d", rd_idx, rs1_idx, rs1, rs2_idx, rs2));
 `endif
 
@@ -326,7 +330,9 @@ module mkVLIW(RVIfc);
 `ifdef KONATA_ENABLE
         // Mark instruction in konata
         let current_id = i2e_result.k_id;
-    	executeKonata(lfh, current_id);
+    	for (Integer i = 0; i < 4; i = i + 1) begin
+            executeKonata(lfh, current_id + fromInteger(i));
+        end
 `endif
 
         let poisoned = False;
@@ -410,14 +416,13 @@ module mkVLIW(RVIfc);
         let poisoned = e2w_result.poisoned;
         e2w.deq();
 
-        `ifdef KONATA_ENABLE
-        if (!poisoned) begin
-            `DEBUG_PRINT(("[cyc=%d] Writeback", cyc))
-            let current_id = e2w_result.k_id;
-            $display("retire current id = %d", current_id);
-            writebackKonata(lfh,current_id);
-            retired.enq(current_id);
+        `DEBUG_PRINT(("[cyc=%d] Writeback", cyc))
+`ifdef KONATA_ENABLE
+        let current_id = e2w_result.k_id;
+        for (Integer i = 0; i < 4; i = i + 1) begin
+            writebackKonata(lfh, current_id + fromInteger(i));
         end
+        retired.enq(current_id);
 `endif
         
         Vector#(4,Bit#(32)) rf_vals;
@@ -481,8 +486,9 @@ module mkVLIW(RVIfc);
             rf_vals[3] = 0;
             rf_dsts[3] = 0;
             sc_dsts[3] = 0;
-        end 
+        end
 
+        $display("Write ", fshow(rf_dsts), fshow(rf_vals));
         rf.set(rf_dsts, rf_vals);
         sc_remove_dsts.wset(sc_dsts);
     endrule
@@ -503,13 +509,15 @@ module mkVLIW(RVIfc);
     rule administrative_konata_commit;
 		    retired.deq();
 		    let f = retired.first();
-		    commitKonata(lfh, f, commit_id);
+		    nCommitKonata(lfh, f, commit_id, 4);
 	endrule
 		
 	rule administrative_konata_flush;
 		    squashed.deq();
 		    let f = squashed.first();
-		    squashKonata(lfh, f);
+            for (Integer i = 0; i < 4; i = i + 1) begin
+                squashKonata(lfh, f + fromInteger(i));
+            end
 	endrule
 `endif
 		

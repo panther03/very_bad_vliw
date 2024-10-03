@@ -1,7 +1,7 @@
 use analysis::{trace_to_basicblocks,dep_analysis};
 use analysis::AnalyzedProgram;
 use assembler::{assemble, assemble_ap};
-use isa::Label;
+use isa::{Label, Operand};
 use scheduling::{ScheduledProgram,schedule_program};
 //use scheduling::{loop_schedule, ScheduleSlot};
 use serde_json;
@@ -41,7 +41,7 @@ fn label_auipc(trace: &mut Vec<Inst>) {
             if inst.opcode != Opcode::ADDI {
                 panic!("Expected ADDI offset right after AUIPC! Got {}", inst);
             }
-            inst.offset = Some(-1 * auipc_pc);
+            inst.offset = Some(auipc_pc);
             inst.label = Label::SrcAddrSpace(auipc_pc as usize);
             auipc_pc = -1;
         } else if inst.opcode == Opcode::AUIPC {
@@ -50,17 +50,29 @@ fn label_auipc(trace: &mut Vec<Inst>) {
     }
 }
 
-fn fix_labels(sp: &mut ScheduledProgram) {
+fn fix_addresses(sp: &mut ScheduledProgram) {
     for bundle in sp.schedule.iter_mut() {
+        bundle.addr = bundle.addr * 16;
         for inst in bundle.valid_insts_mut() {
             if let Label::SrcAddrSpace(l) = inst.inst.label {
                 let new_addr = sp.starts.get(&l)
                     .unwrap_or_else(|| panic!("Could not find new label for: {} (inst addr = {})", l, inst.inst.addr));
-                inst.inst.label = Label::DstAddrSpace(*new_addr);
+                inst.inst.label = Label::DstAddrSpace(*new_addr * 16);
+            }
+            if let Operand::Immediate(mut imm) = inst.inst.src2 {
+                if let Some(offset) = inst.inst.offset {
+                    imm += offset;
+                }
+                if let Label::DstAddrSpace(d) = inst.inst.label {
+                    imm -= d as i64;
+                }
+                inst.inst.src2 = Operand::Immediate(imm);
             }
         }
     }
 }
+
+
 
 fn core(inp_json_path: &Path, args: &Args) -> String {
     let mut trace = read_trace(inp_json_path);
@@ -76,7 +88,7 @@ fn core(inp_json_path: &Path, args: &Args) -> String {
     };
     if !args.skip_vliw {  
         let mut sp = schedule_program(ap);
-        fix_labels(&mut sp);
+        fix_addresses(&mut sp);
         if !args.skip_assemble {
             assemble(&sp, orig_size, args.bytes_hex)
         } else {

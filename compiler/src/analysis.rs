@@ -42,7 +42,9 @@ impl DepInst {
 
 impl fmt::Display for DepInst {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:\t{:<20}|", self.inst.addr, self.inst)?;
+        let mut inst_string = String::new();
+        self.inst.print_fill(&mut inst_string, 20);
+        write!(f, "{:<4x}:\t{}|", self.inst.addr, inst_string)?;
         write!(f, "FD: ")?;
         for false_dep in self.false_deps.iter() {
             write!(f, "{} ", false_dep)?;
@@ -93,36 +95,44 @@ impl fmt::Display for AnalyzedProgram {
 
 
 pub fn trace_to_basicblocks(trace: Vec<Inst>) -> Vec<Vec<Inst>> {
-    let mut bb_starts: Vec<usize> = Vec::new();
+    let mut bb_starts: Vec<usize> = vec![0];
     for inst in trace.iter() {
         if let Label::SrcAddrSpace(l) = inst.label {
             assert!(l < trace.len()*4);
             assert!(l % 4 == 0);
-            bb_starts.push(l);
+            if !bb_starts.contains(&l) {
+                bb_starts.push(l);
+            }
         }
     }
-
+    
     bb_starts.sort();
+    bb_starts.reverse();
     let mut bbs: Vec<Vec<Inst>> = Vec::new();
     let mut curr_bb: Vec<Inst> = Vec::new();
     let trace_len = trace.len();
     for inst in trace {
-        let cond = inst.opcode.is_control_flow() || (inst.addr == (trace_len - 1)*4);
-        // at the start of a basic block
-        if *(bb_starts.first()).unwrap_or(&0) == inst.addr {
-            bbs.push(curr_bb);
-            curr_bb = vec![inst];
-        } else {
-            curr_bb.push(inst);
+        let is_bb_end = inst.opcode.is_control_flow() || (inst.addr == (trace_len - 1)*4);
+        let is_bb_start = *(bb_starts.last()).unwrap_or(&0) == inst.addr;
+        // Start of a basic block? Push what we have 
+        if is_bb_start {
+            bb_starts.pop();
+            if !curr_bb.is_empty() {
+                bbs.push(curr_bb);
+                curr_bb = Vec::new();
+            }
         }
 
-        // at the end of the basic block? Push what we have
-        // Note that the instruction can be both the start and end of the basic block, in this case we push the one we just created
-        if cond {
+        // Start the new one with this instruction, add to existing, or finish off a basic block.
+        curr_bb.push(inst);
+
+        // At the end? Push it away and start a new one
+        if is_bb_end {
             bbs.push(curr_bb);
             curr_bb = Vec::new();
         }
     }
+    assert!(bb_starts.is_empty());
     bbs
 }
 

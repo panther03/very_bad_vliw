@@ -29,16 +29,16 @@ impl Bundle {
 
     pub fn valid_insts_mut<'a>(&'a mut self) -> Vec<&'a mut DepInst> {
         let mut insts = Vec::new();
-        if let Some(inst) = &mut self.alu0 {
-            insts.push(inst);
-        }
-        if let Some(inst) = &mut self.alu1 {
-            insts.push(inst);
-        }
         if let Some(inst) = &mut self.mem {
             insts.push(inst);
         }
         if let Some(inst) = &mut self.branch {
+            insts.push(inst);
+        }
+        if let Some(inst) = &mut self.alu0 {
+            insts.push(inst);
+        }
+        if let Some(inst) = &mut self.alu1 {
             insts.push(inst);
         }
         insts
@@ -58,15 +58,15 @@ impl fmt::Display for Bundle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn fmt_inst(f: &mut fmt::Formatter<'_>, inst: &Option<DepInst>) -> fmt::Result {
             match inst {
-                Some(inst) => write!(
-                    f,
-                    " {:<20} |",
-                    inst.inst
-                ),
-                None => write!(f, "                    |"),
+                Some(inst) => {
+                    let mut s = String::new();
+                    inst.inst.print_fill(&mut s, 20);
+                    write!(f, "{}", s.as_str())
+                },
+                None => write!(f, "                     | "),
             }
         }
-        write!(f, "{} |", self.addr)?;
+        write!(f, "{:<4x} | ", self.addr)?;
         fmt_inst(f, &self.alu0)?;
         fmt_inst(f, &self.alu1)?;
         fmt_inst(f, &self.mem)?;
@@ -83,11 +83,18 @@ pub struct ScheduledProgram {
     pub starts: HashMap<usize, usize>,
 }
 
+impl ScheduledProgram {
+    pub fn aligned_end(&self) -> i32 {
+        ((self.schedule.len()*16 + 16)/4 + 15) as i32 & (-16)
+    }
+}
+
 impl fmt::Display for ScheduledProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut j = 0;
+        write!(f, "Data start: {}\n", self.aligned_end())?;
         for (i,bundle) in (&self.schedule).iter().enumerate() {
-            if i == *self.bb_starts.get(j).unwrap() {
+            if j < self.bb_starts.len() && i == *self.bb_starts.get(j).unwrap() {
                 write!(f, "BasicBlock {}:\n", j)?;
                 j += 1;
             }
@@ -179,6 +186,8 @@ pub fn schedule_program(prog: AnalyzedProgram) -> ScheduledProgram {
         // most of the time will have more, and the branch slots will be empty, so it is ok
         fill_schedule(base, &mut schedule);
         if let Some(cf_insn) = bb.cf_insn {
+            let branch_start = min_cycle(&starts, &cf_insn, base);
+            fill_schedule(branch_start, &mut schedule);
             starts.insert(cf_insn.inst.addr, base);
             schedule.last_mut().unwrap().branch = Some(cf_insn);
         }

@@ -16,10 +16,10 @@ int exit(int c);
 
 int main()
 {
-  int a = 2;
-  int b = 3;
+  int a = 32;
+  int b = 69;
   int result = multiply(a, b);
-  if (result == 6)
+  if (result == 2208)
   {
     putchar('O');
     putchar('k');
@@ -35,6 +35,7 @@ int main()
     char *p;
     for (p = s; p < s + 14; p++)
       putchar(*p);
+    putchar(0x30 + result);
     exit(1);
   }
   return 0;

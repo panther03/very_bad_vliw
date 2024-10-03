@@ -412,7 +412,7 @@ pub enum Label {
 impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Label::DstAddrSpace(i) | Label::SrcAddrSpace(i) => write!(f, "{}", i),
+            Label::DstAddrSpace(i) | Label::SrcAddrSpace(i) => write!(f, "{:x}", i),
             Label::None => write!(f, ""),
         }?;
         Ok(())
@@ -536,7 +536,7 @@ fn parse_j_format_inst(opcode: Opcode, remaining_line: String) -> Result<Inst, S
     Ok(Inst {
         opcode,
         addr: 0,
-        // TODO handle jump and link which is not using the link register
+        // TODO handle a jump and link which is not using the link register
         dest: Operand::Gpr(if opcode == Opcode::JAL {1} else {0}),
         src1: None,
         src2: Operand::None,
@@ -603,6 +603,16 @@ impl Inst {
             },
         };
         inst.and_then(|mut x| {x.addr = addr; Ok(x)}) 
+    }
+
+    pub fn print_fill(&self, output_str: &mut String, budget: usize) {
+        let inst_str = format!("{}", self);
+        let gap = std::cmp::max(budget-inst_str.len(), 0);
+        output_str.push_str(inst_str.as_str());
+        for _ in 0..gap {
+            output_str.push(' ');
+        }
+        output_str.push_str(" | ");
     }
 
     pub fn nop() -> Self {

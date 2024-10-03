@@ -12,9 +12,10 @@ TODO: why is _start not at 0 in the elf output ?
 - [X] Updated dependency analysis (w/ False dependencies)
 - [X] Update scheduling
 - [X] Update labels of branch/jump
-- [ ] Patching hex file and adding offset for loads
+- [X] Patching hex file and adding offset for loads
 - [X] Assemble output into hex or figure out why GCC is still generating jump + branch for one branch
-- [ ] CPU support for global load offset
+- [X] CPU support for global load offset
+- [X] mul32 runs
 - [ ] Compile & run matmul32 + Show that IPC is > 1
 - [ ] Test a function pointer, see what code is generated
 
@@ -95,3 +96,23 @@ Handle the size difference between the old and new program by adding some data i
 
 Branches and jumps will be fixed before being generated. 
 we will have some sort of hashmap that maps the addresses of the source instructions to the bundle that they ended up in.
+
+## name brainstorm
+
+VROOM ?
+
+Very _ Out of Order Machine ?
+
+## testing strategy 
+
+Components:
+
+- Elf -> Assembly
+  - Manually verified parsed output was correct against objdump
+- Scheduling/Optimization
+  - Not currently tested
+- Assembly -> Hex
+  - Diff between objcopy'd hex from a binary and output with "-bv"
+  - Test that the offsets are correct
+  - Moved offsetting to before assembler stage to test
+- CPU

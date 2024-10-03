@@ -6,7 +6,7 @@
 
 #define stack_start 0x3800 - 4
 
-.section ".text"
+.section ".text.init"
 #  .text
 #  .align 6
   .globl _start

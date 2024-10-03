@@ -3,13 +3,7 @@ use crate::{analysis::{AnalyzedBasicBlock, AnalyzedProgram, DepInst}, isa::{Inst
 fn parse_i_format(inst: &Inst) -> Result<u32, String> {
     let mut word = 0x0;
     let Operand::Immediate(imm) = inst.src2 else {return Err(String::from("I format should have immediate in src2")); };
-    let mut imm = imm as i32;
-    if let Some(offset) = inst.offset {
-        imm += offset as i32;
-    }
-    if let Label::DstAddrSpace(d) = inst.label {
-        imm += (d * 16) as i32;
-    }
+    let imm = imm as i32;
     
     word |= inst.opcode.opcode_bits();
     word |= inst.dest.unwrap_gpr() << 7;
@@ -26,7 +20,7 @@ fn bits(word: u32, start: u32, end: u32) -> u32 {
 fn get_offset_from_label(label: &Label, addr: usize) -> Result<i32,String> {
     match label {
         Label::DstAddrSpace(label) => {
-            Ok(((*label as i32) - (addr as i32)) * 16)
+            Ok(((*label as i32) - (addr as i32)))
         }
         Label::SrcAddrSpace(label) => {
             Ok((*label as i32) - (addr as i32))
@@ -78,6 +72,7 @@ fn assemble_insn(inst: &Inst, addr: usize) -> Result<u32, String> {
         }
         InstParseFormat::J => {
             let label = get_offset_from_label(&inst.label, addr)? as u32;
+            dbg!(label);
             //if label > ((1<<21)-1) { return Err(format!("label too large: {}", label))}
             word |= inst.opcode.opcode_bits();
             word |= inst.dest.unwrap_gpr() << 7;
@@ -121,9 +116,10 @@ fn le_word(word: u32) -> String {
 pub fn assemble (sp: &ScheduledProgram, orig_size: usize, bytes_hex: bool) -> String { 
     let mut output = String::new();
 
-    let offset = (sp.schedule.len()*16 - orig_size + 16) as i32;
+    let aligned_end = sp.aligned_end();
+    let offset = aligned_end*4 - (orig_size as i32);
     assert!(offset > 0);
-    output.push_str(format!("@0\n{}\n0\n0\n0\n", offset).as_str());
+    output.push_str(format!("@0\n{:x}\n0\n0\n0\n", offset).as_str());
     for bundle in sp.schedule.iter() {
         for inst in bundle.insts() {
             let word = if let Some(inst) = inst {
@@ -141,9 +137,11 @@ pub fn assemble (sp: &ScheduledProgram, orig_size: usize, bytes_hex: bool) -> St
             }
         }
     }
-    output.push_str(format!("@{:x}", sp.schedule.len()*16 + 16).as_str());
+    
+    output.push_str(format!("@{:x}", aligned_end).as_str());
     output
 }
+
 
 pub fn assemble_ap_single(inst: &Inst, bytes_hex: bool, disassembly: bool, output: &mut String) {
     let word = match assemble_insn(&inst, inst.addr) {
@@ -151,13 +149,7 @@ pub fn assemble_ap_single(inst: &Inst, bytes_hex: bool, disassembly: bool, outpu
         Err(e) => panic!("Can't assemble instruction {}:\n {}", &inst, e),
     };
     if disassembly {
-        let inst_str = format!("{}", inst);
-        let gap = std::cmp::max(22-inst_str.len(), 0);
-        output.push_str(inst_str.as_str());
-        for _ in 0..gap {
-            output.push(' ');
-        }
-        output.push_str(" | ");
+        inst.print_fill(output, 22);
     }
     if bytes_hex {
         output.push_str(&le_word(word));
@@ -179,4 +171,30 @@ pub fn assemble_ap (ap: &AnalyzedProgram, bytes_hex: bool, disassembly: bool) ->
     }
 
     output
+}
+
+mod tests {
+    use crate::isa::Inst;
+
+    use super::assemble_insn;
+
+    #[test]
+    fn test_j_format() {
+        let inst = Inst::from_str("jal 0x55d68", 0x14).unwrap();
+        assert!(assemble_insn(&inst, 0x14) == Ok(0x555550ef))
+    }
+
+    #[test]
+    fn test_lui_format() {
+        let inst = Inst::from_str("lui x31,0xffffe", 0).unwrap();
+        assert!(assemble_insn(&inst, 0x0) == Ok(0xffffefb7));
+        let inst = Inst::from_str("lui x31,0x1", 0).unwrap();
+        assert!(assemble_insn(&inst, 0x0) == Ok(0x00001fb7));        
+    }
+
+    /*#[test]
+    fn test_branch_format() {
+        let inst = Inst::from_str("bne	t6,t6,-1366", 0).unwrap();
+        assert!(assemble_insn(&inst, 0x0) == Ok(0x01ff9463));
+    }*/
 }

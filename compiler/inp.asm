@@ -1,15 +1,3 @@
-mv x12,x10
-li x15,0
-li x10,0
-li x16,32
-sra x14,x11,x15
-andi x14,x14,1
-sll x13,x12,x15
-addi x15,x15,1
-beq x14,x0,0x28 
-add x10,x10,x13
-bne x15,x16,0x10 
-ret 
 li x1,0
 li x2,0
 li x3,0
@@ -46,7 +34,19 @@ sll x2,x2,x10
 jal 0x13c 
 li x10,0
 jal 0x100 
-j 0xc0 
+j 0x90 
+mv x12,x10
+li x15,0
+li x10,0
+li x16,32
+sra x14,x11,x15
+andi x14,x14,1
+sll x13,x12,x15
+addi x15,x15,1
+beq x14,x0,0xbc 
+add x10,x10,x13
+bne x15,x16,0xa4 
+ret 
 addi x2,x2,-32
 sw x1,28(x2)
 sw x8,24(x2)
