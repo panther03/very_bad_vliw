@@ -28,6 +28,7 @@ interface RVIfc;
     method Action getDResp(Mem a);
     method ActionValue#(Mem) getMMIOReq();
     method Action getMMIOResp(Mem a);
+    method ActionValue#(Bit#(32)) getInsnCount();
 endinterface
 
 typedef struct {
@@ -93,7 +94,7 @@ typedef struct {
 // Implementation //
 ///////////////////
 
-module mkVLIW(RVIfc);
+module mkVLIW #(Bool ctr_enable) (RVIfc);
     ////////////////////////////////////////
     // Interface with memory and devices //
     //////////////////////////////////////
@@ -120,6 +121,8 @@ module mkVLIW(RVIfc);
     RWire#(Vector#(4, Bit#(5))) sc_remove_dsts <- mkRWire;
 
     Reg#(Bit#(32)) addr_offset <- mkReg(0);
+
+    Reg#(Bit#(32)) insn_count <- mkReg(0);
 
     ///////////////////////
     // Functional Units //
@@ -242,7 +245,7 @@ module mkVLIW(RVIfc);
             };
             let rs1_rdy = (!dis[i].valid_rs1 || fields.rs1 == 0) || sc.search(fields.rs1);
             let rs2_rdy = (!dis[i].valid_rs2 || fields.rs2 == 0) || sc.search(fields.rs2);
-            all_rdy = all_rdy && rs1_rdy && rs2_rdy;
+            all_rdy = all_rdy && ((rs1_rdy && rs2_rdy) || (inst == 0));
         end
         
         if (all_rdy) begin
@@ -424,6 +427,7 @@ module mkVLIW(RVIfc);
         Vector#(4,Bit#(32)) rf_vals;
         Vector#(4,Bit#(5)) rf_dsts;
         Vector#(4,Bit#(5)) sc_dsts;
+
         if (dis[0].inst != 0) begin
             if (!poisoned) begin
                 rf_vals[0] <- mu.deq();
@@ -484,6 +488,14 @@ module mkVLIW(RVIfc);
             sc_dsts[3] = 0;
         end 
 
+        if (ctr_enable) begin
+            insn_count <= insn_count 
+                + ((dis[3].inst != 0) ? 32'h1 : 32'h0)
+                + ((dis[2].inst != 0) ? 32'h1 : 32'h0)
+                + ((dis[1].inst != 0) ? 32'h1 : 32'h0)
+                + ((dis[0].inst != 0) ? 32'h1 : 32'h0);
+        end
+
         //$display("rf_dsts = ", fshow(rf_dsts));
         //$display("rf_vals = ", fshow(rf_vals));
         rf.set(rf_dsts, rf_vals);
@@ -536,5 +548,8 @@ module mkVLIW(RVIfc);
     endmethod
     method Action getMMIOResp(Mem a);
 		fromMMIO.enq(a);
+    endmethod
+    method ActionValue#(Bit#(32)) getInsnCount();
+        return insn_count;
     endmethod
 endmodule

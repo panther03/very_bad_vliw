@@ -1,6 +1,6 @@
 import Core::*;
 module mkSim(Empty);
-    Core core <- mkCore(0, False);
+    Core core <- mkCore(True);
 
     rule finishSim;
         if (core.getFinished()) $finish;

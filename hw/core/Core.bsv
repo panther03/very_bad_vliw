@@ -33,7 +33,7 @@ interface Core;
 endinterface
 
 (* synthesize *)
-module mkCore #(Bit#(4) coreId, Bool multithreaded) (Core);
+module mkCore #(Bool ctr_enable) (Core);
 `ifdef CACHE_ENABLE
     CacheInterface cache <- mkCacheInterface();
     BRAM_Configure cfg = defaultValue();
@@ -46,7 +46,7 @@ module mkCore #(Bit#(4) coreId, Bool multithreaded) (Core);
     BRAM2PortBE#(Bit#(12), Word, 4) bram <- mkBRAM2ServerBE(cfg);
 `endif
 
-    RVIfc rv_core <- mkVLIW();
+    RVIfc rv_core <- mkVLIW(ctr_enable);
 
     FIFO#(CoreBusRequest) busReqs <- mkFIFO;
     FIFO#(Bit#(32)) busResps <- mkFIFO;
@@ -142,6 +142,7 @@ module mkCore #(Bit#(4) coreId, Bool multithreaded) (Core);
             // exit()
             end else if (req.addr == 'hf000_fff8) begin
                 $display("RAN CYCLES", cycle_count);
+                if (ctr_enable) $display("RAN INSNS", rv_core.getInsnCount);
 
                 // Exiting Simulation
                 if (req.data == 0) begin
@@ -184,7 +185,7 @@ module mkCore #(Bit#(4) coreId, Bool multithreaded) (Core);
 
 
     method Bool getFinished();
-        return (multithreaded ? (count_arrived > 1) : (count_arrived == 1));
+        return count_arrived == 1;
     endmethod
 
     method ActionValue#(CoreBusRequest) getBusReq();
