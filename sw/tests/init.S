@@ -20,7 +20,7 @@ _start:
   li  x7, 0
   li  x8, 0
   li  x9, 0
-#  li  x10,0
+  li  x10,0
   li  x11,0
   li  x12,0
   li  x13,0

@@ -25,6 +25,16 @@ Very _ Out of Order Machine ?
 
 Verifiably _ Out of Order Machine ?
 
+Chat: 
+
+VILAW – Very Incompetent Little Algorithm Wizard
+VLISP – Very Large Instructions, Small Processor 
+VLAIW – Virtually Lost Amidst Instruction Woes
+VLIPS – Very Low Intelligence Processing System
+
+prompt:
+>> "Hey, I'm building a VLIW CPU and I want to give it a call of some sort that will be a silly funny acronym involving VLIW or something like that." Next prompt: "What if we would add one more letter somewhere? So that it would be a funny and silly acronym, that would also sound nice when read just the letters?"
+
 ## GCC idiosyncrasies
 
 - auipc generation:

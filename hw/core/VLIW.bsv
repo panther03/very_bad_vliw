@@ -1,5 +1,5 @@
 `define KONATA_ENABLE
-//`define DEBUG_ENABLE
+`define DEBUG_ENABLE
 `include "Logging.bsv"
 
 import FIFO::*;
@@ -18,7 +18,6 @@ import Alu::*;
 import MemUnit::*;
 import MemTypes::*;
 import MultiportRam::*;
-
 
 
 interface RVIfc;
@@ -94,6 +93,19 @@ typedef struct {
 // Implementation //
 ///////////////////
 
+function Bit#(32) scDestsToMask(Vector#(4, Bit#(5)) dests, Bool polarity);
+    Bit#(32) mask = 0;
+    for (Integer i = 0; i < 4; i = i + 1) begin
+        mask = mask | (32'h1 << dests[i]);
+    end
+    let polarity_mask = polarity ? 32'h0 : 32'hFFFFFFFF;
+    return mask ^ polarity_mask;
+endfunction
+
+function Bool scReadSrc(Bit#(32) sc, Bit#(5) src);
+    return unpack(sc[src]);
+endfunction
+
 module mkVLIW #(Bool ctr_enable) (RVIfc);
     ////////////////////////////////////////
     // Interface with memory and devices //
@@ -112,7 +124,7 @@ module mkVLIW #(Bool ctr_enable) (RVIfc);
     Ehr#(2, Bit#(1)) epoch <- mkEhr(1'h0);
 
     MultiportRam#(4, Bit#(32)) rf <- mkMultiportRam(32'h0);
-    MultiportRam#(8, Bool) sc <- mkMultiportRam(True);
+    Reg#(Bit#(32)) sc <- mkReg(32'hFFFFFFFF);
 
     Reg#(Bool) starting <- mkReg(True);
     Reg#(Bool) offsetting <- mkReg(True);
@@ -228,7 +240,7 @@ module mkVLIW #(Bool ctr_enable) (RVIfc);
         let imem_resp = fromImem.first();
 
         Vector#(4, Word) bundle = unpack(imem_resp.data);
-        //$display("Bundle: ", fshow(bundle));
+        `DEBUG_PRINT(("Bundle: ", fshow(bundle)))
         
         Vector#(4, DecodedInst) dis;
         Vector#(4, RegisterUsage) rus;    
@@ -243,8 +255,8 @@ module mkVLIW #(Bool ctr_enable) (RVIfc);
                 rs2: fields.rs2,
                 rd: fields.rd
             };
-            let rs1_rdy = (!dis[i].valid_rs1 || fields.rs1 == 0) || sc.search(fields.rs1);
-            let rs2_rdy = (!dis[i].valid_rs2 || fields.rs2 == 0) || sc.search(fields.rs2);
+            let rs1_rdy = (!dis[i].valid_rs1 || fields.rs1 == 0) || scReadSrc(sc, fields.rs1);
+            let rs2_rdy = (!dis[i].valid_rs2 || fields.rs2 == 0) || scReadSrc(sc, fields.rs2);
             all_rdy = all_rdy && ((rs1_rdy && rs2_rdy) || (inst == 0));
         end
         
@@ -496,8 +508,8 @@ module mkVLIW #(Bool ctr_enable) (RVIfc);
                 + ((dis[0].inst != 0) ? 32'h1 : 32'h0);
         end
 
-        //$display("rf_dsts = ", fshow(rf_dsts));
-        //$display("rf_vals = ", fshow(rf_vals));
+        `DEBUG_PRINT(("rf_dsts = ", fshow(rf_dsts)))
+        `DEBUG_PRINT(("rf_vals = ", fshow(rf_vals)))
         rf.set(rf_dsts, rf_vals);
         sc_remove_dsts.wset(sc_dsts);
     endrule
@@ -505,11 +517,9 @@ module mkVLIW #(Bool ctr_enable) (RVIfc);
     rule updateScoreboard if (!starting);
         Vector#(4, Bit#(5)) remove_dsts = fromMaybe(replicate(5'h0), sc_remove_dsts.wget());
         Vector#(4, Bit#(5)) insert_dsts = fromMaybe(replicate(5'h0), sc_insert_dsts.wget());
-        Vector#(8, Bit#(5)) dsts = append(remove_dsts, insert_dsts);
-        // Marking busy (i.e. setting to False in SC) has higher priority than
-        // setting to free'd (True). So Falses are in LSBs.
-        Vector#(8, Bool) vals = unpack(8'h0F);
-        sc.set(dsts, vals);
+        Bit#(32) remove_mask = scDestsToMask(remove_dsts, True);
+        Bit#(32) insert_mask = scDestsToMask(insert_dsts, False);
+        sc <= (sc | remove_mask) & insert_mask;
     endrule
 
 	// ADMINISTRATION:
