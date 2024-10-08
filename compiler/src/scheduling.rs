@@ -172,31 +172,29 @@ fn asap_local(
 }
 
 pub fn schedule_program(prog: AnalyzedProgram) -> ScheduledProgram {
-    let mut starts: HashMap<usize, usize> = HashMap::new();
-    let mut schedule = Vec::new();
-    let mut bb_starts = Vec::new();
+    let mut sp = ScheduledProgram {
+        starts: HashMap::new(),
+        schedule: Vec::new(),
+        bb_starts: Vec::new()
+    };
 
     let mut base = 0;
-    for bb in prog.bbs {
-        bb_starts.push(base);
+    for (i,bb) in prog.bbs.into_iter().enumerate() {
+        sp.bb_starts.push(base);
         for inst in bb.insns {
-            asap_local(&mut starts, base, inst, &mut schedule);
+            asap_local(&mut sp.starts, base, inst, &mut sp.schedule);
         }
         // need to have at least base number of instructions in the schedule
         // most of the time will have more, and the branch slots will be empty, so it is ok
-        fill_schedule(base, &mut schedule);
+        fill_schedule(base, &mut sp.schedule);
         if let Some(cf_insn) = bb.cf_insn {
-            let branch_start = min_cycle(&starts, &cf_insn, base);
-            fill_schedule(branch_start, &mut schedule);
-            starts.insert(cf_insn.inst.addr, base);
-            schedule.last_mut().unwrap().branch = Some(cf_insn);
+            let branch_start = min_cycle(&sp.starts, &cf_insn, base);
+            fill_schedule(branch_start, &mut sp.schedule);
+            sp.starts.insert(cf_insn.inst.addr, base);
+            sp.schedule.last_mut().unwrap().branch = Some(cf_insn);
         }
-        base = schedule.len();
+        base = sp.schedule.len();
     }
     
-    ScheduledProgram {
-        starts,
-        schedule,
-        bb_starts,
-    }
+    sp
 }

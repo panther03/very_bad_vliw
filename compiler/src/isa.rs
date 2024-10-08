@@ -25,7 +25,7 @@ pub enum Opcode {
     SRLI,
     SRAI,
     SLTI,
-    STLIU,
+    SLTIU,
     // Loads
     LB,
     LH,
@@ -78,7 +78,7 @@ impl Opcode {
             "srli" => Ok(Self::SRLI),
             "srai" => Ok(Self::SRAI),
             "slti" => Ok(Self::SLTI),
-            "stliu" => Ok(Self::STLIU),
+            "sltiu" => Ok(Self::SLTIU),
             "lb" => Ok(Self::LB),
             "lh" => Ok(Self::LH),
             "lw" => Ok(Self::LW),
@@ -126,7 +126,7 @@ impl Opcode {
             Self::SRLI => "srli",
             Self::SRAI => "srai",
             Self::SLTI => "slti",
-            Self::STLIU => "stliu",
+            Self::SLTIU => "sltiu",
             Self::LB => "lb",
             Self::LH => "lh",
             Self::LW => "lw",
@@ -159,7 +159,7 @@ impl Opcode {
             Self::AND | Self::SLL | Self::SRL | Self::SRA |
             Self::SLT | Self::SLTU | Self::ADDI | Self::XORI |
             Self::ORI | Self::ANDI | Self::SLLI | Self::SRLI |
-            Self::SRAI | Self::SLTI | Self::STLIU |
+            Self::SRAI | Self::SLTI | Self::SLTIU |
             Self::LUI | Self::AUIPC | Self::MOV | Self::LI => ExecutionUnit::ALU,
     
             Self::BEQ | Self::BNE | Self::BLT |
@@ -178,7 +178,7 @@ impl Opcode {
             Self::SLT | Self::SLTU => InstParseFormat::R,
             Self::ADDI | Self::XORI | Self::ORI | Self::ANDI |
             Self::SLLI | Self::SRLI | Self::SRAI | Self::SLTI |
-            Self::STLIU => InstParseFormat::I,
+            Self::SLTIU => InstParseFormat::I,
             Self::BEQ | Self::BNE | Self::BLT |
             Self::BGE | Self::BLTU | Self::BGEU => InstParseFormat::B,
             Self::LB | Self::LH | Self::LW | Self::LBU | Self::LHU => InstParseFormat::L,
@@ -238,7 +238,7 @@ impl Opcode {
             Self::SRLI => 0x5,
             Self::SRAI => 0x5,
             Self::SLTI => 0x2,
-            Self::STLIU => 0x3,
+            Self::SLTIU => 0x3,
             Self::LB => 0x0,
             Self::LH => 0x1,
             Self::LW => 0x2,

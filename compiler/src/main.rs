@@ -79,7 +79,7 @@ fn core(inp_json_path: &Path, args: &Args) -> String {
     let orig_size = trace.len() * 4;
     if !args.skip_vliw {
         // remove nops
-        trace = trace.into_iter().filter(|i| i.opcode != Opcode::NOP).collect();
+        //trace = trace.into_iter().filter(|i| i.opcode != Opcode::NOP).collect();
         label_auipc(&mut trace);
     }
     let ap_insns = trace_to_basicblocks(trace).into_iter().map(|bb| dep_analysis(bb)).collect();

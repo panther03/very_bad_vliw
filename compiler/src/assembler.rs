@@ -72,7 +72,6 @@ fn assemble_insn(inst: &Inst, addr: usize) -> Result<u32, String> {
         }
         InstParseFormat::J => {
             let label = get_offset_from_label(&inst.label, addr)? as u32;
-            dbg!(label);
             //if label > ((1<<21)-1) { return Err(format!("label too large: {}", label))}
             word |= inst.opcode.opcode_bits();
             word |= inst.dest.unwrap_gpr() << 7;

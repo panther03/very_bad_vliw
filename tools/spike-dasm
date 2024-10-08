@@ -1,3 +1,0 @@
-#!/bin/bash
-# dummy spike-dasm to replace
-echo "$(</dev/stdin)"

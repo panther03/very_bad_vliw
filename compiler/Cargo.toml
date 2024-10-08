@@ -1,5 +1,5 @@
 [package]
-name = "hw2"
+name = "vliw_opt"
 version = "0.1.0"
 edition = "2021"
 

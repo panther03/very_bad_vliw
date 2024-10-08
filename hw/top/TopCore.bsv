@@ -1,3 +1,5 @@
+// TODO make single core
+
 import Core::*;
 import MeshNxN::*;
 

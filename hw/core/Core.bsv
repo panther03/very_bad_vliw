@@ -1,5 +1,3 @@
-// PIPELINED SINGLE CORE PROCESSOR WITH 2 LEVEL CACHE
-
 // cache enabled by default
 `define CACHE_ENABLE
 
@@ -11,7 +9,7 @@ import SpecialFIFOs::*;
 import Ehr::*;
 // local imports
 import RVUtil::*;
-import SlightlyBetterVliw::*;
+import VLIW::*;
 
 import MemTypes::*;
 `ifdef CACHE_ENABLE

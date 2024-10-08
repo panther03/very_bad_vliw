@@ -98,10 +98,12 @@ pub fn trace_to_basicblocks(trace: Vec<Inst>) -> Vec<Vec<Inst>> {
     let mut bb_starts: Vec<usize> = vec![0];
     for inst in trace.iter() {
         if let Label::SrcAddrSpace(l) = inst.label {
-            assert!(l < trace.len()*4);
-            assert!(l % 4 == 0);
-            if !bb_starts.contains(&l) {
-                bb_starts.push(l);
+            if inst.opcode.is_control_flow() {
+                assert!(l < trace.len()*4);
+                assert!(l % 4 == 0);
+                if !bb_starts.contains(&l) {
+                    bb_starts.push(l);
+                }
             }
         }
     }

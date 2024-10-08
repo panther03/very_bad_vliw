@@ -1,20 +1,35 @@
-TARGETS := SingleCoreTest
-TARGETSV := TopCore
+# sw/apps/ folder
+APP ?= hello
 
-.DEFAULT_GOAL := all
-.PHONY: clean $(TARGETS) $(TARGETSV)
+# Shared build folder for everything
+BUILD_DIR = $(realpath .)/build
 
-$(TARGETS): 
-	make -f generic.mk BINARY_NAME=$@
+.DEFAULT_GOAL = sim
 
-$(TARGETSV): 
-	make -f generic.mk BINARY_NAME=$@ verilog
+.PHONY: sim tests syn app clean
+
+sim:
+	@mkdir -p $(BUILD_DIR)/hw
+	make -f hw.mk BUILD_DIR=$(BUILD_DIR)/hw BINARY_NAME=Sim
+	cp -r hw/mem/*.mem $(BUILD_DIR)/hw
+
+syn:
+	@mkdir -p $(BUILD_DIR)/hw
+	make -f hw.mk BUILD_DIR=$(BUILD_DIR)/hw BINARY_NAME=TopCore verilog
+	cp -r hw/mem/*.mem $(BUILD_DIR)/hw
+
+app: compiler
+	@mkdir -p $(BUILD_DIR)/sw
+	make -C sw/apps/$(APP)/ BUILD_DIR=$(BUILD_DIR)/sw/
+
+tests: compiler
+	@mkdir -p $(BUILD_DIR)/sw/tests
+	make -C sw/tests/ BUILD_DIR=$(BUILD_DIR)/sw/tests
+
+compiler: compiler/target/release/vliw_opt
+COMPILER_SRCS = $(wildcard $(compiler/src)/*.rs)
+compiler/target/release/vliw_opt: $(COMPILER_SRCS)
+	cd compiler && cargo build --release
 
 clean:
 	rm -rf build/
-#	find . -name "*.so" -type f -delete
-#	find . -name "*.sched" -type f -delete
-#	find . -name "*.bo" -type f -delete
-#	find . -name "*.ba" -type f -delete
-
-all: clean $(TARGETS) $(TARGETSV)

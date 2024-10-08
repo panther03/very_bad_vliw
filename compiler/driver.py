@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+
 import sys
 import subprocess
 import tempfile
 import re
+import pathlib
 
 CC_PREFIX="riscv64-elf-"
 
@@ -67,12 +70,21 @@ def parse_objdump(objdump_output):
                 operands += ","
             if operands_after:
                 operands += operands_after
+            if op == "seqz":
+                operands = operands.split(',')
+                operands.append("1")
+                op = "sltiu"
+                operands = ",".join(operands)
             if op.startswith('b'):
                 # branch instruction; add 0x before the last operand
                 operands = operands.split(',')
                 if op.endswith('z'):
                     operands.insert(1, "x0")
                     op = op[:-1]
+                op_map = {"ble": "bge", "bgt": "blt", "bleu": "bgeu", "bgtu": "bltu"}
+                if op in op_map.keys():
+                    operands = [operands[1],operands[0],operands[2]]
+                    op = op_map[op]
                 operands[2] = "0x" + operands[2]
                 operands = ",".join(operands)
             elif op.startswith('j'):
@@ -96,10 +108,14 @@ if __name__ == "__main__":
 
     objdump_output = subprocess.run([CC_PREFIX + "objdump", "-d", input_elf], capture_output=True)
     input_asm = parse_objdump(objdump_output.stdout.decode('utf-8'))
-    if len(sys.argv) >= 4 and sys.argv[3] == "inponly":
-        print(input_asm)
-        exit(0)
-    new_out_hex = subprocess.run(["target/release/hw2", "STDIN", "-o", "STDOUT"], input=input_asm.encode("utf-8"), capture_output=True)
+    #if len(sys.argv) >= 4 and sys.argv[3] == "inponly":
+    #exit(0)
+    sc_path = str(pathlib.Path(__file__).parent.resolve())
+    new_out_hex = subprocess.run([sc_path + "/target/release/vliw_opt", "STDIN", "-o", "STDOUT"], input=input_asm.encode("utf-8"), capture_output=True)
+    if new_out_hex.returncode:
+        print(new_out_hex.stderr.decode("utf-8"), file=sys.stderr)
+        exit(1)
     subprocess.run([CC_PREFIX + "objcopy","-O","verilog","--verilog-data-width","4","-R",".text",input_elf,output_hex])
     finalize_hex(output_hex, new_out_hex.stdout)
+    print(input_asm)
     
